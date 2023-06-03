@@ -1,4 +1,3 @@
-from queue import LifoQueue
 from queue import PriorityQueue
 import math
 import random
@@ -6,7 +5,7 @@ import random
 import pygame
 
 
-WIDTH   = 800
+WIDTH   = 1000
 WIN     = pygame.display.set_mode(size=(WIDTH, WIDTH))
 FPS         = 60
 SPEED_MS    = 5
@@ -368,7 +367,7 @@ def get_clicked_position (pos, rows, width):
 #def get_clicked_position
 
 def main (win, width):
-    ROWS    = 80
+    ROWS    = 100
     grid    = Node.make_grid(ROWS, width)
     start   = None
     end     = None
