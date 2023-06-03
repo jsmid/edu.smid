@@ -6,9 +6,12 @@ import random
 import pygame
 
 
-WIDTH   = 80
+WIDTH   = 800
 WIN     = pygame.display.set_mode(size=(WIDTH, WIDTH))
+FPS         = 60
+SPEED_MS    = 5
 pygame.display.set_caption("A* Path Finding Algorithm")
+clock = pygame.time.Clock()
 
 class Node (object):
 
@@ -46,15 +49,15 @@ class Node (object):
     #end def h
 
     @classmethod
-    def reconstruct_path(cls, came_from, current, draw) :
+    def reconstruct_path(cls, came_from, current, rows, width) :
         while current in came_from : # start is not in came_from
             current = came_from[current]
             current.make_path()
-            draw()
+            cls.redraw_nodes([current], rows, width, SPEED_MS)
     #end def reconstruct_path
 
     @classmethod
-    def run(cls, draw, grid, start, end):
+    def run(cls, grid, start, end, rows, width):
         count       = 0
         open_set    = PriorityQueue()
         # Items are sorted lowest score (first item in the tuple) first
@@ -82,7 +85,7 @@ class Node (object):
 
             if current == end :
                 # We've found the shortest path!
-                Node.reconstruct_path(came_from, end, draw)
+                Node.reconstruct_path(came_from, end, rows, width)
                 end.make_end()
                 start.make_start()
                 return True
@@ -101,13 +104,23 @@ class Node (object):
                         open_set.put((f_score[neighbor], count, neighbor))
                         open_set_hash.add(neighbor)
                         neighbor.make_open()
-            draw()
+                        cls.redraw_nodes([neighbor], rows, width, SPEED_MS)
 
             if current != start :
                 current.make_closed()
+                cls.redraw_nodes([current], rows, width, SPEED_MS)
 
         return False
     #end def run
+
+    @classmethod
+    def redraw_nodes(cls, nodes, rows, width, delay):
+        for node in nodes:
+            pygame.draw.rect(WIN, node.color, (node.x+1, node.y+1, node.width-1, node.width-1))
+
+        pygame.display.flip()
+        pygame.event.pump()
+        pygame.time.delay(delay)
 
     @classmethod
     def make_grid(cls, rows, width, random_walls = 0.):
@@ -365,6 +378,7 @@ def main (win, width):
     is_maze = False
 
     while run :
+        clock.tick(FPS)
         Node.draw_nodes(win, ROWS, grid, width)
         for event in pygame.event.get():
             if event.type == pygame.QUIT :
@@ -404,7 +418,7 @@ def main (win, width):
                         for node in row :
                             node.update_neighbors(grid, ["RIGHT", "LEFT", "UP", "DOWN"]) if is_maze else node.update_neighbors(grid)
 
-                    Node.run(lambda: Node.draw_nodes(win, ROWS, grid, width), grid, start, end)
+                    Node.run(grid, start, end, ROWS, width)
 
                 if event.key == pygame.K_c :
                     start   = None
