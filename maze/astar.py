@@ -94,7 +94,7 @@ class Node (object):
                 current_pos  = current.get_position()
                 temp_g_score = g_score[current]+math.sqrt((neighbor_pos[0]-current_pos[0])**2 + (neighbor_pos[1]-current_pos[1])**2)
                 if temp_g_score < g_score[neighbor] :
-                    # this neighbor is better
+                    # this neighbour is better
                     came_from[neighbor] = current
                     g_score[neighbor] = temp_g_score
                     f_score[neighbor] = temp_g_score + Node.h(neighbor_pos, end.get_position())
@@ -308,9 +308,6 @@ class Node (object):
             and not grid[self.row-1][self.col-1].is_wall : # UP + LEFT
             self.neighbors.append(grid[self.row-1][self.col-1])
     #end def update_neighbors
-
-    def __lt__ (self, other):
-        return False
 
     @property
     def is_closed (self):
