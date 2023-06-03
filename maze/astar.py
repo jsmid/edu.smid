@@ -1,5 +1,5 @@
-from Queue import LifoQueue
-from Queue import PriorityQueue
+from queue import LifoQueue
+from queue import PriorityQueue
 import math
 import random
 
@@ -172,7 +172,7 @@ class Node (object):
         visited_hash = {(start.row, start.col)}
         walls   = PriorityQueue();
         inits   = start.get_neighbors(grid, ["UP", "DOWN", "LEFT", "RIGHT"])
-        for dir, node in inits.items() :
+        for _, node in inits.items() :
             walls.put((random.uniform(0, 1), node))
 
         while not walls.empty() :
@@ -182,7 +182,6 @@ class Node (object):
                 visited = [x for x in neighbors_d.items() if (x[1].row, x[1].col) in visited_hash]
                 if len(visited) == 1 :
                     current.reset() # tear down the wall
-                    cell = visited[0][1] # the cell that's on the opposite side of the wall
                     cell_dir = visited[0][0]
                     other    = None
                     if cell_dir == "UP" and "DOWN" in neighbors_d.keys() :
@@ -201,7 +200,7 @@ class Node (object):
                         visited_hash.add((current.row, current.col))
                         visited_hash.add((other.row, other.col))
 
-                        for dir, node in other_walls.items() :
+                        for _, node in other_walls.items() :
                             if not (node.row, node.col) in visited_hash:
                                 walls.put((random.uniform(0, 1), node))
 
