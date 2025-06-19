@@ -1,0 +1,12 @@
+this is 
+te
+xt
+f
+o
+r
+analysis using the #cctype library
+
+@ 455 5
+# 41
+!
+

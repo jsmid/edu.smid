@@ -1,0 +1,11 @@
+C:/Documents/cpp_projects/1400_composition/build/CMakeFiles/edit_cache.dir
+C:/Documents/cpp_projects/1400_composition/build/CMakeFiles/rebuild_cache.dir
+C:/Documents/cpp_projects/1400_composition/build/arrayslib/CMakeFiles/arrayslib.dir
+C:/Documents/cpp_projects/1400_composition/build/arrayslib/CMakeFiles/edit_cache.dir
+C:/Documents/cpp_projects/1400_composition/build/arrayslib/CMakeFiles/rebuild_cache.dir
+C:/Documents/cpp_projects/1400_composition/build/studentlib/CMakeFiles/studentlib.dir
+C:/Documents/cpp_projects/1400_composition/build/studentlib/CMakeFiles/edit_cache.dir
+C:/Documents/cpp_projects/1400_composition/build/studentlib/CMakeFiles/rebuild_cache.dir
+C:/Documents/cpp_projects/1400_composition/build/student/CMakeFiles/student.dir
+C:/Documents/cpp_projects/1400_composition/build/student/CMakeFiles/edit_cache.dir
+C:/Documents/cpp_projects/1400_composition/build/student/CMakeFiles/rebuild_cache.dir

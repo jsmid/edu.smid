@@ -1,0 +1,2 @@
+C:\MinGW\bin\ar.exe qc libcustomlib.a CMakeFiles/customlib.dir/src/overdraft.cpp.obj
+C:\MinGW\bin\ranlib.exe libcustomlib.a
