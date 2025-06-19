@@ -17,7 +17,7 @@ using namespace std;
 // The return value of 0 typically indicates successful execution.
 int main()
 {
-    cout << "Hi C++!";
-    cout << "\n";
+    // TODO: Replace the following line so that the program prints "Hello, world!" (without quotes) and a new line to the screen.
+    // Use the appropriate function from the <iostream> library.
     return 0;
 }
