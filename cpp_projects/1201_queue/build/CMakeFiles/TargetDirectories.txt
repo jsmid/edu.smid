@@ -1,0 +1,8 @@
+C:/Documents/cpp_projects/1201_queue/build/CMakeFiles/edit_cache.dir
+C:/Documents/cpp_projects/1201_queue/build/CMakeFiles/rebuild_cache.dir
+C:/Documents/cpp_projects/1201_queue/build/simlib/CMakeFiles/simlib.dir
+C:/Documents/cpp_projects/1201_queue/build/simlib/CMakeFiles/edit_cache.dir
+C:/Documents/cpp_projects/1201_queue/build/simlib/CMakeFiles/rebuild_cache.dir
+C:/Documents/cpp_projects/1201_queue/build/simlib_bin/CMakeFiles/simlib_bin.dir
+C:/Documents/cpp_projects/1201_queue/build/simlib_bin/CMakeFiles/edit_cache.dir
+C:/Documents/cpp_projects/1201_queue/build/simlib_bin/CMakeFiles/rebuild_cache.dir

@@ -1,0 +1,16 @@
+
+C:\Documents\cpp_projects\1100_op_overload>del time0.o 
+
+C:\Documents\cpp_projects\1100_op_overload>del usetime.exe 
+
+C:\Documents\cpp_projects\1100_op_overload>g++ -c ./timelib/*.cpp  
+
+C:\Documents\cpp_projects\1100_op_overload>g++ -o usetime.exe usetime.cpp time0.o 
+
+C:\Documents\cpp_projects\1100_op_overload>del vector.o 
+
+C:\Documents\cpp_projects\1100_op_overload>del randwalk.exe 
+
+C:\Documents\cpp_projects\1100_op_overload>g++ -c ./vectorlib/*.cpp  
+
+C:\Documents\cpp_projects\1100_op_overload>g++ -o randwalk.exe randwalk.cpp vector.o 
