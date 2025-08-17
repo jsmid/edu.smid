@@ -1,27 +1,30 @@
+/**
+ * @class Singleton
+ * @brief Implements the Singleton design pattern.
+ *
+ * The Singleton class ensures that only one instance of itself can be created,
+ * providing a global point of access to that instance. This is achieved by:
+ * - Making the constructor private to prevent direct instantiation.
+ * - Providing a static method (getInstance) to access the single instance.
+ * - Deleting the copy constructor and assignment operator to prevent copying.
+ * - Using a static pointer to hold the instance and a mutex for thread-safe initialization.
+ *
+ * Purpose of the Singleton design pattern:
+ * The Singleton pattern is used when exactly one object is needed to coordinate actions
+ * across the system. It is commonly used for managing shared resources, configuration,
+ * logging, or connection pools, where having multiple instances could lead to inconsistent
+ * state or resource conflicts.
+ */
 #include <iostream>
-
-/*
-This file demonstrates the Singleton design pattern in C++.
-
-The Singleton pattern ensures that a class has only one instance and provides a global point of access to it.
-This is useful when exactly one object is needed to coordinate actions across the system, such as a configuration manager or a logging class.
-
-In this implementation:
-    - The constructor is private to prevent direct instantiation.
-    - A private static pointer holds the single instance of the class.
-    - The copy constructor and assignment operator are deleted to prevent copying.
-    - The static getInstance() method provides access to the single instance, creating it if it does not already exist.
-    - Example usage in main() demonstrates that multiple calls to getInstance() return the same object.
-
-Note: The double-checked locking in getInstance() is not thread-safe in standard C++.
-For thread safety, consider using std::call_once, std::mutex, or function-local static variables (since C++11).
-*/
+#include <mutex>
 
 // Singleton class definition
 class Singleton {
 private:
     // Private static pointer to the single instance
     static Singleton* instance;
+    // Mutex for thread-safe initialization (optional for single-threaded)
+    static std::mutex mtx;
 
     // Private constructor to prevent direct instantiation
     Singleton() {
@@ -37,6 +40,9 @@ public:
     static Singleton* getInstance() {
         // Double-checked locking for thread safety
         if (instance == nullptr) {
+            // Lock the mutex only if the instance is not created yet
+            // This avoids locking overhead after the instance is created
+            std::lock_guard<std::mutex> lock(mtx);
             if (instance == nullptr) {
                 instance = new Singleton();
             }
@@ -52,6 +58,7 @@ public:
 
 // Initialize static members
 Singleton* Singleton::instance = nullptr;
+std::mutex Singleton::mtx;
 
 // Example usage
 int main() {
