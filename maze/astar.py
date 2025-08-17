@@ -5,23 +5,24 @@ import random
 import pygame
 
 
-WIDTH   = 1000
-WIN     = pygame.display.set_mode(size=(WIDTH, WIDTH))
-FPS         = 60
-SPEED_MS    = 5
+WIDTH           = 600 # Width of the window in pixels
+NODE_WIDTH      = 6 # Width of a single node in pixels
+WIN             = pygame.display.set_mode(size=(WIDTH, WIDTH))
+FPS             = 60
+SPEED_MS        = 5
 pygame.display.set_caption("A* Path Finding Algorithm")
 clock = pygame.time.Clock()
 
 class Node (object):
 
-    CLOSED_RGB  = (220, 32, 32)
-    OPENED_RGB  = (64, 200, 64)
-    RESET_RGB   = (255, 255, 255)
-    WALL_RGB    = (0, 0, 0)
-    START_RGB   = (224, 128, 32)
-    END_RGB     = (64, 160, 160)
-    PATH_RGB    = (160, 255, 255)
-    LINE_RGB    = (192, 192, 192)
+    CLOSED_RGB  = (220, 32, 32, 255)  # Red, fully opaque
+    OPENED_RGB  = (64, 200, 64, 255)  # Green, fully opaque
+    RESET_RGB   = (255, 255, 255, 255)  # White, fully opaque
+    WALL_RGB    = (0, 0, 0, 255)  # Black, fully opaque
+    START_RGB   = (224, 128, 32, 255)  # Orange, fully opaque
+    END_RGB     = (64, 160, 160, 255)  # Cyan, fully opaque
+    PATH_RGB    = (160, 255, 255, 255)  # Light Cyan, fully opaque
+    LINE_RGB    = (192, 192, 192, 255)  # Light Gray, fully opaque
 
     def __init__ (self, row, col, width, total_rows, status = RESET_RGB):
         self.row        = row
@@ -36,16 +37,22 @@ class Node (object):
 
     @classmethod
     def h(cls, p1, p2):
-        ''' Our predicted distance from p1 to p2
-
-        @param p1: current node
-        @param p2: end node
+        '''Heuristic: Euclidean distance (for 8-directional movement).
+        For 4-directional movement, Manhattan distance is faster and admissible.
         '''
         x1, y1 = p1
         x2, y2 = p2
+        # Use Euclidean distance for 8-directional movement
+        return math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
+        #end def h
 
-        return math.sqrt((x1-x2)**2 + (y1-y2)**2)
-    #end def h
+    @classmethod
+    def h2(cls, p1, p2):
+        '''Heuristic: Manhattan distance (for 4-directional movement).'''
+        x1, y1 = p1
+        x2, y2 = p2
+        return abs(x1 - x2) + abs(y1 - y2)
+        #end def h2
 
     @classmethod
     def reconstruct_path(cls, came_from, current, rows, width) :
@@ -56,7 +63,7 @@ class Node (object):
     #end def reconstruct_path
 
     @classmethod
-    def run(cls, grid, start, end, rows, width):
+    def run(cls, grid, start, end, rows, width, heuristic):
         count       = 0
         open_set    = PriorityQueue()
         # Items are sorted lowest score (first item in the tuple) first
@@ -68,7 +75,7 @@ class Node (object):
         g_score = {node: float("inf") for row in grid for node in row}
         g_score[start] = 0
         f_score = {node: float("inf") for row in grid for node in row}
-        f_score[start] = Node.h(start.get_position(), end.get_position())
+        f_score[start] = heuristic(start.get_position(), end.get_position())
 
         # Keeps track about everything that's in the open_set
         open_set_hash = {start}
@@ -92,12 +99,12 @@ class Node (object):
             for neighbor in current.neighbors :
                 neighbor_pos = neighbor.get_position()
                 current_pos  = current.get_position()
-                temp_g_score = g_score[current]+math.sqrt((neighbor_pos[0]-current_pos[0])**2 + (neighbor_pos[1]-current_pos[1])**2)
+                temp_g_score = g_score[current] + heuristic(neighbor_pos, current_pos) 
                 if temp_g_score < g_score[neighbor] :
                     # this neighbour is better
                     came_from[neighbor] = current
                     g_score[neighbor] = temp_g_score
-                    f_score[neighbor] = temp_g_score + Node.h(neighbor_pos, end.get_position())
+                    f_score[neighbor] = temp_g_score + heuristic(neighbor_pos, end.get_position())
                     if neighbor not in open_set_hash :
                         count += 1
                         open_set.put((f_score[neighbor], count, neighbor))
@@ -139,15 +146,30 @@ class Node (object):
     #end def make_grid
 
     @classmethod
-    def reset_grid(cls, grid):
+    def reset_grid(cls, grid, keep_start_end = False):
         rows = len(grid)
         for i in range(rows) :
             for j in range(rows) :
                 if not grid[i][j].is_wall :
-                    grid[i][j].reset()
+                    if keep_start_end and (grid[i][j].is_start or grid[i][j].is_end) :
+                        continue
+                    else :
+                        grid[i][j].reset()
+                        cls.redraw_nodes([grid[i][j]], rows, WIDTH, 0)
 
         return grid
     #end def reset_grid
+
+    @classmethod
+    def count_steps(cls, grid):
+        rows = len(grid)
+        steps = 0
+        for i in range(rows) :
+            for j in range(rows) :
+                if grid[i][j].is_closed or grid[i][j].is_open or grid[i][j].is_path :
+                    steps += 1
+
+        return steps
 
     @classmethod
     def make_maze(cls, rows, width):
@@ -316,7 +338,11 @@ class Node (object):
     @property
     def is_open (self):
         return self.color == Node.OPENED_RGB
-
+    
+    @property
+    def is_path (self):
+        return self.color == Node.PATH_RGB  
+    
     @property
     def is_wall (self):
         return self.color == Node.WALL_RGB
@@ -364,17 +390,19 @@ def get_clicked_position (pos, rows, width):
 #def get_clicked_position
 
 def main (win, width):
-    ROWS    = 100
+    ROWS    = WIDTH // NODE_WIDTH
     grid    = Node.make_grid(ROWS, width)
     start   = None
     end     = None
     run     = True
     started = False
     is_maze = False
+    heuristics = [Node.h, Node.h2]  # List of heuristics to choose from
+    h_idx = 0  # Index for the current heuristic
 
     while run :
         clock.tick(FPS)
-        Node.draw_nodes(win, ROWS, grid, width)
+        Node.draw_nodes(win, ROWS, grid, width)        
         for event in pygame.event.get():
             if event.type == pygame.QUIT :
                 run = False
@@ -408,59 +436,71 @@ def main (win, width):
                     end = None
 
             if event.type == pygame.KEYDOWN :
-                if event.key == pygame.K_SPACE and start and end :
+                if event.key == pygame.K_SPACE and start and end : 
+                    if h_idx != 0 : 
+                        grid = Node.reset_grid(grid, True)             
                     for row in grid :
                         for node in row :
                             node.update_neighbors(grid, ["RIGHT", "LEFT", "UP", "DOWN"]) if is_maze else node.update_neighbors(grid)
-
-                    Node.run(grid, start, end, ROWS, width)
+                    Node.run(grid, start, end, ROWS, width, heuristics[h_idx % len(heuristics)])
+                    print("Path found with heuristic: {} at index {} in {} steps.".format(
+                        heuristics[h_idx % len(heuristics)].__name__, h_idx % len(heuristics), Node.count_steps(grid)))
+                    h_idx += 1
 
                 if event.key == pygame.K_c :
                     start   = None
                     end     = None
                     grid    = Node.make_grid(ROWS, width)
+                    h_idx   = 0
                     is_maze = False
 
                 if event.key == pygame.K_1 :
                     start   = None
                     end     = None
                     grid    = Node.make_grid(ROWS, width, .1)
+                    h_idx   = 0
                     is_maze = False
 
                 if event.key == pygame.K_2 :
                     start   = None
                     end     = None
                     grid    = Node.make_grid(ROWS, width, .2)
+                    h_idx   = 0
                     is_maze = False
 
                 if event.key == pygame.K_3 :
                     start   = None
                     end     = None
                     grid    = Node.make_grid(ROWS, width, .3)
+                    h_idx   = 0
                     is_maze = False
 
                 if event.key == pygame.K_4 :
                     start   = None
                     end     = None
                     grid    = Node.make_grid(ROWS, width, .4)
+                    h_idx   = 0
                     is_maze = False
 
                 if event.key == pygame.K_5 :
                     start   = None
                     end     = None
                     grid    = Node.make_grid(ROWS, width, .5)
+                    h_idx   = 0
                     is_maze = False
 
                 if event.key == pygame.K_m :
                     start   = None
                     end     = None
                     grid    = Node.make_maze(ROWS, width)
+                    h_idx   = 0
                     is_maze = True
 
                 if event.key == pygame.K_r :
                     start   = None
                     end     = None
                     grid    = Node.reset_grid(grid)
+                    h_idx   = 0
 
     pygame.quit()
 #end main
