@@ -5,380 +5,312 @@ import random
 import pygame
 
 
-WIDTH           = 600 # Width of the window in pixels
-NODE_WIDTH      = 6 # Width of a single node in pixels
+WIDTH           = 960 # Width of the window in pixels
+NODE_WIDTH      = 4 # Width of a single node in pixels
 WIN             = pygame.display.set_mode(size=(WIDTH, WIDTH))
-FPS             = 60
+FPS             = 40
 SPEED_MS        = 5
 pygame.display.set_caption("A* Path Finding Algorithm")
 clock = pygame.time.Clock()
 
-class Node (object):
+class Node(pygame.sprite.Sprite):
+    CLOSED_RGB  = (220, 32, 32, 255)
+    OPENED_RGB  = (64, 200, 64, 255)
+    RESET_RGB   = (255, 255, 255, 255)
+    WALL_RGB    = (0, 0, 0, 255)
+    START_RGB   = (224, 128, 32, 255)
+    END_RGB     = (64, 160, 160, 255)
+    PATH_RGB    = (160, 255, 255, 255)
+    LINE_RGB    = (192, 192, 192, 255)
 
-    CLOSED_RGB  = (220, 32, 32, 255)  # Red, fully opaque
-    OPENED_RGB  = (64, 200, 64, 255)  # Green, fully opaque
-    RESET_RGB   = (255, 255, 255, 255)  # White, fully opaque
-    WALL_RGB    = (0, 0, 0, 255)  # Black, fully opaque
-    START_RGB   = (224, 128, 32, 255)  # Orange, fully opaque
-    END_RGB     = (64, 160, 160, 255)  # Cyan, fully opaque
-    PATH_RGB    = (160, 255, 255, 255)  # Light Cyan, fully opaque
-    LINE_RGB    = (192, 192, 192, 255)  # Light Gray, fully opaque
-
-    def __init__ (self, row, col, width, total_rows, status = RESET_RGB):
+    def __init__(self, row, col, width, total_rows, status=RESET_RGB):
+        super().__init__()
         self.row        = row
         self.col        = col
-        self.x          = row*width
-        self.y          = col*width
+        self.x          = row * width
+        self.y          = col * width
         self.color      = status
         self.neighbors  = []
-        self.width      = width
+        self.width      = width-1 # Subtract 1 to avoid drawing issues at the edges
         self.total_rows = total_rows
         self.total_cols = total_rows
+        self.image      = pygame.Surface((self.width, self.width), pygame.SRCALPHA)
+        self.image.fill(self.color)
+        self.rect       = self.image.get_rect(topleft=(self.x, self.y))
+
+    def update_sprite(self):
+        self.image.fill(self.color)
 
     @classmethod
     def h(cls, p1, p2):
-        '''Heuristic: Euclidean distance (for 8-directional movement).
-        For 4-directional movement, Manhattan distance is faster and admissible.
-        '''
         x1, y1 = p1
         x2, y2 = p2
-        # Use Euclidean distance for 8-directional movement
         return math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
-        #end def h
 
     @classmethod
     def h2(cls, p1, p2):
-        '''Heuristic: Manhattan distance (for 4-directional movement).'''
         x1, y1 = p1
         x2, y2 = p2
         return abs(x1 - x2) + abs(y1 - y2)
-        #end def h2
 
     @classmethod
-    def reconstruct_path(cls, came_from, current, rows, width) :
-        while current in came_from : # start is not in came_from
+    def reconstruct_path(cls, came_from, current, rows, width):
+        while current in came_from:
             current = came_from[current]
             current.make_path()
-            cls.redraw_nodes([current], rows, width, SPEED_MS)
-    #end def reconstruct_path
+            cls.redraw_nodes([current])
 
     @classmethod
     def run(cls, grid, start, end, rows, width, heuristic):
-        count       = 0
-        open_set    = PriorityQueue()
-        # Items are sorted lowest score (first item in the tuple) first
-        # In case we have two items with the same score in the queue,
-        # count will help us out.
+        count = 0
+        open_set = PriorityQueue()
         open_set.put((0, count, start))
         came_from = {}
-        # Initialize g_score and f_score
         g_score = {node: float("inf") for row in grid for node in row}
         g_score[start] = 0
         f_score = {node: float("inf") for row in grid for node in row}
         f_score[start] = heuristic(start.get_position(), end.get_position())
-
-        # Keeps track about everything that's in the open_set
         open_set_hash = {start}
 
-        # When open set is empty there's no solution
-        while not open_set.empty() :
+        while not open_set.empty():
             for event in pygame.event.get():
-                if event.type == pygame.QUIT :
+                if event.type == pygame.QUIT:
                     pygame.quit()
 
-            current = open_set.get()[2] # Gets the lowest score item
+            current = open_set.get()[2]
             open_set_hash.remove(current)
 
-            if current == end :
-                # We've found the shortest path!
+            if current == end:
                 Node.reconstruct_path(came_from, end, rows, width)
                 end.make_end()
                 start.make_start()
                 return True
 
-            for neighbor in current.neighbors :
+            for neighbor in current.neighbors:
                 neighbor_pos = neighbor.get_position()
-                current_pos  = current.get_position()
-                temp_g_score = g_score[current] + heuristic(neighbor_pos, current_pos) 
-                if temp_g_score < g_score[neighbor] :
-                    # this neighbour is better
+                current_pos = current.get_position()
+                temp_g_score = g_score[current] + heuristic(neighbor_pos, current_pos)
+                if temp_g_score < g_score[neighbor]:
                     came_from[neighbor] = current
                     g_score[neighbor] = temp_g_score
                     f_score[neighbor] = temp_g_score + heuristic(neighbor_pos, end.get_position())
-                    if neighbor not in open_set_hash :
+                    if neighbor not in open_set_hash:
                         count += 1
                         open_set.put((f_score[neighbor], count, neighbor))
                         open_set_hash.add(neighbor)
                         neighbor.make_open()
-                        cls.redraw_nodes([neighbor], rows, width, SPEED_MS)
+                        cls.redraw_nodes([neighbor])
 
-            if current != start :
+            if current != start:
                 current.make_closed()
-                cls.redraw_nodes([current], rows, width, SPEED_MS)
+                cls.redraw_nodes([current])
 
         return False
-    #end def run
 
     @classmethod
-    def redraw_nodes(cls, nodes, rows, width, delay):
+    def redraw_nodes(cls, nodes):
         for node in nodes:
-            pygame.draw.rect(WIN, node.color, (node.x+1, node.y+1, node.width-1, node.width-1))
-
-        pygame.display.flip()
-        pygame.event.pump()
-        pygame.time.delay(delay)
+            node.update_sprite()
+            WIN.blit(node.image, node.rect)
 
     @classmethod
-    def make_grid(cls, rows, width, random_walls = 0.):
+    def make_grid(cls, rows, width, random_walls=0.):
         grid = []
-        gap  = width // rows
-        for i in range(rows) :
+        gap = width // rows
+        for i in range(rows):
             grid.append([])
-            for j in range(rows) :
+            for j in range(rows):
                 status = Node.RESET_RGB
-                if random.uniform(0, 1) < random_walls :
+                if random.uniform(0, 1) < random_walls:
                     status = Node.WALL_RGB
-
                 node = cls(i, j, gap, rows, status)
                 grid[i].append(node)
-
         return grid
-    #end def make_grid
 
     @classmethod
-    def reset_grid(cls, grid, keep_start_end = False):
+    def reset_grid(cls, grid, keep_start_end=False):
         rows = len(grid)
-        for i in range(rows) :
-            for j in range(rows) :
-                if not grid[i][j].is_wall :
-                    if keep_start_end and (grid[i][j].is_start or grid[i][j].is_end) :
+        for i in range(rows):
+            for j in range(rows):
+                if not grid[i][j].is_wall:
+                    if keep_start_end and (grid[i][j].is_start or grid[i][j].is_end):
                         continue
-                    else :
+                    else:
                         grid[i][j].reset()
-                        cls.redraw_nodes([grid[i][j]], rows, WIDTH, 0)
-
+                        cls.redraw_nodes([grid[i][j]])
         return grid
-    #end def reset_grid
 
     @classmethod
     def count_steps(cls, grid):
         rows = len(grid)
         steps = 0
-        for i in range(rows) :
-            for j in range(rows) :
-                if grid[i][j].is_closed or grid[i][j].is_open or grid[i][j].is_path :
+        for i in range(rows):
+            for j in range(rows):
+                if grid[i][j].is_closed or grid[i][j].is_open or grid[i][j].is_path:
                     steps += 1
-
         return steps
 
     @classmethod
     def make_maze(cls, rows, width):
-        ''' The method employs Jarnik's algorithm (1930), later appropriated by Prim (1957)
-        and Dijkstra (1959).
-
-        1. Start with a grid full of walls.
-        2. Pick a cell, mark it as part of the maze. Add the walls of the cell to the wall list.
-        3. While there are walls in the list:
-            a. Pick a random wall from the list. If only one of the cells that the wall divides is visited, then:
-                i.  Make the wall a passage and mark the unvisited cell as part of the maze.
-                ii. Add the neighboring walls of the cell to the wall list.
-            b. Remove the wall from the list.
-        '''
-        grid            = Node.make_grid(rows, width, 1.)
-        row             = int(random.uniform(0, rows-1))
-        col             = int(random.uniform(0, rows-1))
-
-        start   = grid[row][col]
+        grid = Node.make_grid(rows, width, 1.)
+        row = int(random.uniform(0, rows - 1))
+        col = int(random.uniform(0, rows - 1))
+        start = grid[row][col]
         start.reset()
         visited_hash = {(start.row, start.col)}
-        walls   = PriorityQueue();
-        inits   = start.get_neighbors(grid, ["UP", "DOWN", "LEFT", "RIGHT"])
-        for _, node in inits.items() :
+        walls = PriorityQueue()
+        inits = start.get_neighbors(grid, ["UP", "DOWN", "LEFT", "RIGHT"])
+        for _, node in inits.items():
             walls.put((random.uniform(0, 1), node))
 
-        while not walls.empty() :
-            current     = walls.get()[1]
+        while not walls.empty():
+            current = walls.get()[1]
             neighbors_d = current.get_neighbors(grid, ["UP", "DOWN", "LEFT", "RIGHT"])
-            if len(neighbors_d.items()) > 0 :
+            if len(neighbors_d.items()) > 0:
                 visited = [x for x in neighbors_d.items() if (x[1].row, x[1].col) in visited_hash]
-                if len(visited) == 1 :
-                    current.reset() # tear down the wall
+                if len(visited) == 1:
+                    current.reset()
                     cell_dir = visited[0][0]
-                    other    = None
-                    if cell_dir == "UP" and "DOWN" in neighbors_d.keys() :
+                    other = None
+                    if cell_dir == "UP" and "DOWN" in neighbors_d.keys():
                         other = neighbors_d["DOWN"]
-                    elif cell_dir == "DOWN" and "UP" in neighbors_d.keys() :
+                    elif cell_dir == "DOWN" and "UP" in neighbors_d.keys():
                         other = neighbors_d["UP"]
-                    elif cell_dir == "LEFT" and "RIGHT" in neighbors_d.keys() :
+                    elif cell_dir == "LEFT" and "RIGHT" in neighbors_d.keys():
                         other = neighbors_d["RIGHT"]
-                    elif cell_dir == "RIGHT" and "LEFT" in neighbors_d.keys() :
+                    elif cell_dir == "RIGHT" and "LEFT" in neighbors_d.keys():
                         other = neighbors_d["LEFT"]
 
-                    if not other is None :
+                    if not other is None:
                         other.reset()
                         other_walls = other.get_neighbors(grid, ["UP", "DOWN", "LEFT", "RIGHT"])
-
                         visited_hash.add((current.row, current.col))
                         visited_hash.add((other.row, other.col))
-
-                        for _, node in other_walls.items() :
+                        for _, node in other_walls.items():
                             if not (node.row, node.col) in visited_hash:
                                 walls.put((random.uniform(0, 1), node))
-
         return grid
-    #end def make_maze
 
     @classmethod
-    def _draw_grid (cls, win, rows, width):
+    def _draw_grid(cls, win, rows, width):
         gap = width // rows
         for i in range(rows):
-            pygame.draw.line(win, Node.LINE_RGB, (0, i*gap), (width, i*gap))
+            pygame.draw.line(win, Node.LINE_RGB, (0, i * gap), (width, i * gap))
             for j in range(rows):
-                pygame.draw.line(win, Node.LINE_RGB, (j*gap, 0), (j*gap, width))
-    #end def _draw_grid
+                pygame.draw.line(win, Node.LINE_RGB, (j * gap, 0), (j * gap, width))
 
     @classmethod
-    def draw_nodes (cls, win, rows, grid, width):
+    def draw_nodes(cls, win, rows, grid, width):
         win.fill(Node.RESET_RGB)
-
-        for row in grid :
-            for node in row :
-                node.draw(win)
-
+        for row in grid:
+            for node in row:
+                node.update_sprite()
+                win.blit(node.image, node.rect)
         cls._draw_grid(win, rows, width)
         pygame.display.update()
-    #end def draw_nodes
 
-    def get_position (self):
+    def get_position(self):
         return self.row, self.col
 
-    def draw (self, win):
-        pygame.draw.rect(win, self.color, (self.x, self.y, self.width, self.width))
-    #end def draw
+    def draw(self, win):
+        self.update_sprite()
+        win.blit(self.image, self.rect)
 
-    def get_neighbors(self, grid, dirs=["DOWN", "UP", "RIGHT", "LEFT", "DOWN_RIGHT", "DOWN_LEFT", "UP_RIGHT", "UP_LEFT"], visited = {}, dist=1):
+    def get_neighbors(self, grid, dirs=["DOWN", "UP", "RIGHT", "LEFT", "DOWN_RIGHT", "DOWN_LEFT", "UP_RIGHT", "UP_LEFT"], visited={}, dist=1):
         ret = {}
-        if self.row < self.total_rows-dist \
-            and "DOWN" in dirs \
-            and not grid[self.row+dist][self.col] in visited: # DOWN
-            ret["DOWN"] = grid[self.row+1][self.col]
-        if self.row > dist-1 \
-            and "UP" in dirs \
-            and not grid[self.row-dist][self.col] in visited : # UP
-            ret["UP"] = grid[self.row-dist][self.col]
-        if self.col < self.total_cols-dist \
-            and "RIGHT" in dirs \
-            and not grid[self.row][self.col+dist] in visited : # RIGHT
-            ret["RIGHT"] = grid[self.row][self.col+dist]
-        if self.col > dist-1 \
-            and "LEFT" in dirs \
-            and not grid[self.row][self.col-dist] in visited : # LEFT
-            ret["LEFT"] = grid[self.row][self.col-dist]
-        if dist == 1 :
-            if self.row < self.total_rows-1 and self.col < self.total_cols-1 \
-                and "DOWN_RIGHT" in dirs \
-                and not grid[self.row+1][self.col+1] in visited : # DOWN + RIGHT
-                ret["DOWN_RIGHT"] = grid[self.row+1][self.col+1]
-            if self.row < self.total_rows-1 and self.col > 0 \
-                and "DOWN_LEFT" in dirs \
-                and not grid[self.row+1][self.col-1] in visited : # DOWN + LEFT
-                ret["DOWN_LEFT"] = grid[self.row+1][self.col-1]
-            if self.row > 0 and self.col < self.total_cols-1 \
-                and "UP_RIGHT" in dirs \
-                and not grid[self.row-1][self.col+1] in visited : # UP + RIGHT
-                ret["UP_RIGHT"] = grid[self.row-1][self.col+1]
-            if self.row > 0 and self.col > 0 \
-                and "UP_LEFT" in dirs \
-                and not grid[self.row-1][self.col-1] in visited : # UP + LEFT
-                ret["UP_LEFT"] = grid[self.row-1][self.col-1]
-
+        if self.row < self.total_rows - dist and "DOWN" in dirs and not grid[self.row + dist][self.col] in visited:
+            ret["DOWN"] = grid[self.row + 1][self.col]
+        if self.row > dist - 1 and "UP" in dirs and not grid[self.row - dist][self.col] in visited:
+            ret["UP"] = grid[self.row - dist][self.col]
+        if self.col < self.total_cols - dist and "RIGHT" in dirs and not grid[self.row][self.col + dist] in visited:
+            ret["RIGHT"] = grid[self.row][self.col + dist]
+        if self.col > dist - 1 and "LEFT" in dirs and not grid[self.row][self.col - dist] in visited:
+            ret["LEFT"] = grid[self.row][self.col - dist]
+        if dist == 1:
+            if self.row < self.total_rows - 1 and self.col < self.total_cols - 1 and "DOWN_RIGHT" in dirs and not grid[self.row + 1][self.col + 1] in visited:
+                ret["DOWN_RIGHT"] = grid[self.row + 1][self.col + 1]
+            if self.row < self.total_rows - 1 and self.col > 0 and "DOWN_LEFT" in dirs and not grid[self.row + 1][self.col - 1] in visited:
+                ret["DOWN_LEFT"] = grid[self.row + 1][self.col - 1]
+            if self.row > 0 and self.col < self.total_cols - 1 and "UP_RIGHT" in dirs and not grid[self.row - 1][self.col + 1] in visited:
+                ret["UP_RIGHT"] = grid[self.row - 1][self.col + 1]
+            if self.row > 0 and self.col > 0 and "UP_LEFT" in dirs and not grid[self.row - 1][self.col - 1] in visited:
+                ret["UP_LEFT"] = grid[self.row - 1][self.col - 1]
         return ret
-    #end def get_neighbors
 
     def update_neighbors(self, grid, dirs=["DOWN", "UP", "RIGHT", "LEFT", "DOWN_RIGHT", "DOWN_LEFT", "UP_RIGHT", "UP_LEFT"]):
         self.neighbors = []
-        if self.row < self.total_rows-1 \
-            and "DOWN" in dirs \
-            and not grid[self.row+1][self.col].is_wall : # DOWN
-            self.neighbors.append(grid[self.row+1][self.col])
-        if self.row > 0 \
-            and "UP" in dirs \
-            and not grid[self.row-1][self.col].is_wall : # UP
-            self.neighbors.append(grid[self.row-1][self.col])
-        if self.col < self.total_cols-1 \
-            and "RIGHT" in dirs \
-            and not grid[self.row][self.col+1].is_wall : # RIGHT
-            self.neighbors.append(grid[self.row][self.col+1])
-        if self.col > 0 \
-            and "LEFT" in dirs \
-            and not grid[self.row][self.col-1].is_wall : # LEFT
-            self.neighbors.append(grid[self.row][self.col-1])
-        if self.row < self.total_rows-1 and self.col < self.total_cols-1 \
-            and "DOWN_RIGHT" in dirs \
-            and not grid[self.row+1][self.col+1].is_wall : # DOWN + RIGHT
-            self.neighbors.append(grid[self.row+1][self.col+1])
-        if self.row < self.total_rows-1 and self.col > 0 \
-            and "DOWN_LEFT" in dirs \
-            and not grid[self.row+1][self.col-1].is_wall : # DOWN + LEFT
-            self.neighbors.append(grid[self.row+1][self.col-1])
-        if self.row > 0 and self.col < self.total_cols-1 \
-            and "UP_RIGHT" in dirs \
-            and not grid[self.row-1][self.col+1].is_wall : # UP + RIGHT
-            self.neighbors.append(grid[self.row-1][self.col+1])
-        if self.row > 0 and self.col > 0 \
-            and "UP_LEFT" in dirs \
-            and not grid[self.row-1][self.col-1].is_wall : # UP + LEFT
-            self.neighbors.append(grid[self.row-1][self.col-1])
-    #end def update_neighbors
+        if self.row < self.total_rows - 1 and "DOWN" in dirs and not grid[self.row + 1][self.col].is_wall:
+            self.neighbors.append(grid[self.row + 1][self.col])
+        if self.row > 0 and "UP" in dirs and not grid[self.row - 1][self.col].is_wall:
+            self.neighbors.append(grid[self.row - 1][self.col])
+        if self.col < self.total_cols - 1 and "RIGHT" in dirs and not grid[self.row][self.col + 1].is_wall:
+            self.neighbors.append(grid[self.row][self.col + 1])
+        if self.col > 0 and "LEFT" in dirs and not grid[self.row][self.col - 1].is_wall:
+            self.neighbors.append(grid[self.row][self.col - 1])
+        if self.row < self.total_rows - 1 and self.col < self.total_cols - 1 and "DOWN_RIGHT" in dirs and not grid[self.row + 1][self.col + 1].is_wall:
+            self.neighbors.append(grid[self.row + 1][self.col + 1])
+        if self.row < self.total_rows - 1 and self.col > 0 and "DOWN_LEFT" in dirs and not grid[self.row + 1][self.col - 1].is_wall:
+            self.neighbors.append(grid[self.row + 1][self.col - 1])
+        if self.row > 0 and self.col < self.total_cols - 1 and "UP_RIGHT" in dirs and not grid[self.row - 1][self.col + 1].is_wall:
+            self.neighbors.append(grid[self.row - 1][self.col + 1])
+        if self.row > 0 and self.col > 0 and "UP_LEFT" in dirs and not grid[self.row - 1][self.col - 1].is_wall:
+            self.neighbors.append(grid[self.row - 1][self.col - 1])
 
     @property
-    def is_closed (self):
+    def is_closed(self):
         return self.color == Node.CLOSED_RGB
 
     @property
-    def is_open (self):
+    def is_open(self):
         return self.color == Node.OPENED_RGB
-    
+
     @property
-    def is_path (self):
-        return self.color == Node.PATH_RGB  
-    
+    def is_path(self):
+        return self.color == Node.PATH_RGB
+
     @property
-    def is_wall (self):
+    def is_wall(self):
         return self.color == Node.WALL_RGB
 
     @property
-    def is_start (self):
+    def is_start(self):
         return self.color == Node.START_RGB
 
     @property
-    def is_end (self):
+    def is_end(self):
         return self.color == Node.END_RGB
 
     @property
-    def is_reset (self):
+    def is_reset(self):
         return self.color == Node.RESET_RGB
 
-    def reset (self):
+    def reset(self):
         self.color = Node.RESET_RGB
+        self.update_sprite()
 
-    def make_start (self):
+    def make_start(self):
         self.color = Node.START_RGB
+        self.update_sprite()
 
-    def make_closed (self):
+    def make_closed(self):
         self.color = Node.CLOSED_RGB
+        self.update_sprite()
 
-    def make_open (self):
+    def make_open(self):
         self.color = Node.OPENED_RGB
+        self.update_sprite()
 
-    def make_wall (self):
+    def make_wall(self):
         self.color = Node.WALL_RGB
+        self.update_sprite()
 
-    def make_end (self):
+    def make_end(self):
         self.color = Node.END_RGB
+        self.update_sprite()
 
-    def make_path (self):
+    def make_path(self):
         self.color = Node.PATH_RGB
+        self.update_sprite()
 
 def get_clicked_position (pos, rows, width):
     gap     = width // rows
