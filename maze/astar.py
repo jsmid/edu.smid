@@ -7,7 +7,7 @@ pygame.font.init()
 
 
 WIDTH           = 960 # Width of the window in pixels
-NODE_WIDTH      = 4 # Width of a single node in pixels
+NODE_WIDTH      = 6 # Width of a single node in pixels
 WIN             = pygame.display.set_mode(size=(WIDTH, WIDTH))
 FPS             = 40
 SPEED_MS        = 5
@@ -353,30 +353,48 @@ def get_clicked_position (pos, rows, width):
 
 def report_result(grid, heuristics, h_idx):
     font = pygame.font.SysFont(None, 32)
-    text_color = (0, 114, 187, 200)  # French blue RGBA
+    text_color = (0, 114, 187, 255)  # French blue RGBA
     msg = "Path found using heuristic '{}' (index {}) in {} steps.".format(
         heuristics[h_idx % len(heuristics)].__name__, h_idx % len(heuristics), Node.count_steps(grid))
     text_surface = font.render(msg, True, text_color[:3])
-                    # Create a surface with alpha for transparency
     text_bg = pygame.Surface(text_surface.get_size(), pygame.SRCALPHA)
-    text_bg.fill((255, 255, 255, 0))  # fully transparent background
+    text_bg.fill((255, 255, 255, 200))  # partially transparent background
     text_bg.blit(text_surface, (0, 0))
-                    # Set alpha for the text
     text_bg.set_alpha(text_color[3])
-                    # Center the text
+
+    # Initial position: center
     x = (WIN.get_width() - text_bg.get_width()) // 2
     y = (WIN.get_height() - text_bg.get_height()) // 2
-    WIN.blit(text_bg, (x, y))
-    pygame.display.update()
-                    # Wait for next SPACE press to continue
+
+    dragging = False
+    offset_x, offset_y = 0, 0
     waiting = True
+
     while waiting:
+        WIN.fill(Node.RESET_RGB)
+        Node.draw_nodes(WIN, len(grid), grid, WIN.get_width())
+        WIN.blit(text_bg, (x, y))
+        pygame.display.update()
+
         for e in pygame.event.get():
             if e.type == pygame.QUIT:
                 pygame.quit()
                 return
-            if e.type == pygame.KEYDOWN and e.key == pygame.K_SPACE:
-                waiting = False
+            if e.type == pygame.KEYDOWN:
+                if e.key == pygame.K_SPACE or e.key == pygame.K_ESCAPE:
+                    waiting = False
+            if e.type == pygame.MOUSEBUTTONDOWN:
+                mx, my = pygame.mouse.get_pos()
+                if x <= mx <= x + text_bg.get_width() and y <= my <= y + text_bg.get_height():
+                    dragging = True
+                    offset_x = mx - x
+                    offset_y = my - y
+            if e.type == pygame.MOUSEBUTTONUP:
+                dragging = False
+            if e.type == pygame.MOUSEMOTION and dragging:
+                mx, my = pygame.mouse.get_pos()
+                x = mx - offset_x
+                y = my - offset_y
 # def report_result
 
 def main (win, width):
