@@ -3,6 +3,7 @@ import math
 import random
 
 import pygame
+pygame.font.init()
 
 
 WIDTH           = 960 # Width of the window in pixels
@@ -42,13 +43,42 @@ class Node(pygame.sprite.Sprite):
         self.image.fill(self.color)
 
     @classmethod
-    def h(cls, p1, p2):
+    def euclidean_distance(cls, p1, p2):
+        """
+        Calculates the Euclidean distance (straight-line distance) between two points.
+
+        Args:
+            p1 (tuple): The first point as a tuple of (x, y) coordinates.
+            p2 (tuple): The second point as a tuple of (x, y) coordinates.
+
+        Returns:
+            float: The Euclidean distance between p1 and p2.
+
+        # This method is typically used as a heuristic function in pathfinding algorithms like A*.
+        # It estimates the cost to reach from one point to another by computing the square root of the sum of squared differences in their coordinates.
+        """
         x1, y1 = p1
         x2, y2 = p2
         return math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
 
     @classmethod
-    def h2(cls, p1, p2):
+    def manhattan_distance(cls, p1, p2):
+        """
+        Calculates the Manhattan distance between two points.
+
+        This heuristic function is commonly used in grid-based pathfinding algorithms
+        such as A* to estimate the cost from the current position to the goal. The Manhattan
+        distance is the sum of the absolute differences of the x and y coordinates of the two points,
+        which represents the minimum number of moves required to reach the target if only horizontal
+        and vertical movements are allowed.
+
+        Args:
+            p1 (tuple): The (x, y) coordinates of the first point.
+            p2 (tuple): The (x, y) coordinates of the second point.
+
+        Returns:
+            int: The Manhattan distance between p1 and p2.
+        """
         x1, y1 = p1
         x2, y2 = p2
         return abs(x1 - x2) + abs(y1 - y2)
@@ -321,6 +351,34 @@ def get_clicked_position (pos, rows, width):
     return row, col
 #def get_clicked_position
 
+def report_result(grid, heuristics, h_idx):
+    font = pygame.font.SysFont(None, 32)
+    text_color = (0, 114, 187, 200)  # French blue RGBA
+    msg = "Path found using heuristic '{}' (index {}) in {} steps.".format(
+        heuristics[h_idx % len(heuristics)].__name__, h_idx % len(heuristics), Node.count_steps(grid))
+    text_surface = font.render(msg, True, text_color[:3])
+                    # Create a surface with alpha for transparency
+    text_bg = pygame.Surface(text_surface.get_size(), pygame.SRCALPHA)
+    text_bg.fill((255, 255, 255, 0))  # fully transparent background
+    text_bg.blit(text_surface, (0, 0))
+                    # Set alpha for the text
+    text_bg.set_alpha(text_color[3])
+                    # Center the text
+    x = (WIN.get_width() - text_bg.get_width()) // 2
+    y = (WIN.get_height() - text_bg.get_height()) // 2
+    WIN.blit(text_bg, (x, y))
+    pygame.display.update()
+                    # Wait for next SPACE press to continue
+    waiting = True
+    while waiting:
+        for e in pygame.event.get():
+            if e.type == pygame.QUIT:
+                pygame.quit()
+                return
+            if e.type == pygame.KEYDOWN and e.key == pygame.K_SPACE:
+                waiting = False
+# def report_result
+
 def main (win, width):
     ROWS    = WIDTH // NODE_WIDTH
     grid    = Node.make_grid(ROWS, width)
@@ -329,7 +387,7 @@ def main (win, width):
     run     = True
     started = False
     is_maze = False
-    heuristics = [Node.h, Node.h2]  # List of heuristics to choose from
+    heuristics = [Node.euclidean_distance, Node.manhattan_distance]  # List of heuristics to choose from
     h_idx = 0  # Index for the current heuristic
 
     while run :
@@ -375,8 +433,8 @@ def main (win, width):
                         for node in row :
                             node.update_neighbors(grid, ["RIGHT", "LEFT", "UP", "DOWN"]) if is_maze else node.update_neighbors(grid)
                     Node.run(grid, start, end, ROWS, width, heuristics[h_idx % len(heuristics)])
-                    print("Path found with heuristic: {} at index {} in {} steps.".format(
-                        heuristics[h_idx % len(heuristics)].__name__, h_idx % len(heuristics), Node.count_steps(grid)))
+                    # Display result as a message in the application window
+                    report_result(grid, heuristics, h_idx)
                     h_idx += 1
 
                 if event.key == pygame.K_c :
@@ -435,6 +493,8 @@ def main (win, width):
                     h_idx   = 0
 
     pygame.quit()
+
+
 #end main
 
 main(WIN, WIDTH)
