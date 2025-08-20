@@ -3,14 +3,17 @@ import math
 import random
 
 import pygame
-pygame.font.init()
 
+pygame.init()  # Ensure pygame is initialized before using any pygame functions
 
 WIDTH           = 960 # Width of the window in pixels
 NODE_WIDTH      = 6 # Width of a single node in pixels
 WIN             = pygame.display.set_mode(size=(WIDTH, WIDTH))
 FPS             = 40
 SPEED_MS        = 5
+TEXT_SIZE       = 28
+
+pygame.font.init()
 pygame.display.set_caption("A* Path Finding Algorithm")
 clock = pygame.time.Clock()
 
@@ -106,6 +109,7 @@ class Node(pygame.sprite.Sprite):
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     pygame.quit()
+                    return
 
             current = open_set.get()[2]
             open_set_hash.remove(current)
@@ -351,53 +355,157 @@ def get_clicked_position (pos, rows, width):
     return row, col
 #def get_clicked_position
 
+class TextSprite(pygame.sprite.Sprite):
+    def __init__(self, text, font, color, bg_color, alpha):
+        super().__init__()
+        text_surface = font.render(text, True, color)
+        padding = 10
+        button_size = 16
+        # Calculate size for text + padding + button
+        width = text_surface.get_width() + padding * 2 + button_size
+        height = max(text_surface.get_height() + padding * 2, button_size + padding)
+        self.image = pygame.Surface((width, height), pygame.SRCALPHA)
+        self.image.fill(bg_color)
+        self.image.set_alpha(alpha)
+        # Draw text
+        self.image.blit(text_surface, (padding, padding))
+        # Draw close button (only 'X', transparent background)
+        self.draw_close_button(padding, button_size, width)
+        self.rect = self.image.get_rect()
+
+    def draw_close_button(self, padding, button_size, width):
+        self.close_rect = pygame.Rect(width - button_size - padding // 2, padding // 2, button_size, button_size)
+        # No rectangle fill, just draw 'X'
+        x_margin = 6
+        pygame.draw.line(
+            self.image, (200, 0, 0),
+            (self.close_rect.left + x_margin, self.close_rect.top + x_margin),
+            (self.close_rect.right - x_margin, self.close_rect.bottom - x_margin), 2
+        )
+        pygame.draw.line(
+            self.image, (200, 0, 0),
+            (self.close_rect.left + x_margin, self.close_rect.bottom - x_margin),
+            (self.close_rect.right - x_margin, self.close_rect.top + x_margin), 2
+        )
+
+    def is_close_clicked(self, mouse_pos):
+        # mouse_pos is relative to the sprite's top-left
+        rel_x = mouse_pos[0] - self.rect.x
+        rel_y = mouse_pos[1] - self.rect.y
+        return self.close_rect.collidepoint(rel_x, rel_y)
+
+    # Move the message box event loop into a method of TextSprite
+    def show(self, win, grid):
+        """ Displays the text sprite in the given window and updates the grid.
+        This method is called to show the message box with the result of the pathfinding.
+        Args:
+            win (pygame.Surface): The Pygame window surface where the message box is drawn.
+            grid (list): The grid of nodes to be displayed."""
+        dragging = False
+        offset_x, offset_y = 0, 0
+        waiting = True
+        while waiting:
+            win.fill(Node.RESET_RGB)
+            Node.draw_nodes(win, len(grid), grid, win.get_width())
+            win.blit(self.image, self.rect)
+            pygame.display.update(self.rect)
+
+            for e in pygame.event.get():
+                if e.type == pygame.QUIT:
+                    pygame.quit()
+                    return
+                if e.type == pygame.KEYDOWN and e.key == pygame.K_SPACE:
+                    waiting = False
+                if e.type == pygame.MOUSEBUTTONDOWN:
+                    mx, my = pygame.mouse.get_pos()
+                    if self.rect.collidepoint(mx, my):
+                        if self.is_close_clicked((mx, my)):
+                            waiting = False
+                        else:
+                            dragging = True
+                            offset_x = mx - self.rect.x
+                            offset_y = my - self.rect.y
+                if e.type == pygame.MOUSEBUTTONUP:
+                    dragging = False
+                if e.type == pygame.MOUSEMOTION and dragging:
+                    mx, my = pygame.mouse.get_pos()
+                    self.rect.x = mx - offset_x
+                    self.rect.y = my - offset_y
+
+class MultiTextSprite(TextSprite):
+    def __init__(self, texts, font, color, bg_color, alpha):
+        super().__init__("", font, color, bg_color, alpha)
+        padding = 10
+        button_size = 16
+        text_surfaces = [font.render(text, True, color) for text in texts]
+        width = max(ts.get_width() for ts in text_surfaces) + padding * 2 + button_size
+        height = sum(ts.get_height() for ts in text_surfaces) + padding * (len(text_surfaces) + 1)
+        height = max(height, button_size + padding)
+        self.image = pygame.Surface((width, height), pygame.SRCALPHA)
+        self.image.fill(bg_color)
+        self.image.set_alpha(alpha)
+        y_offset = padding
+        for ts in text_surfaces:
+            self.image.blit(ts, (padding, y_offset))
+            y_offset += ts.get_height() + padding
+        self.draw_close_button(padding, button_size, width)
+        self.rect = self.image.get_rect()
+
 def report_result(grid, heuristics, h_idx):
-    font = pygame.font.SysFont(None, 32)
-    text_color = (0, 114, 187, 255)  # French blue RGBA
+    """
+    This function creates a message summarizing the pathfinding result, including
+    the heuristic used and the number of steps taken. It then displays this message
+    in a custom message box (TextSprite) centered on the window. The message box
+    can be dragged with the mouse and closed either by clicking its close button
+    or pressing the spacebar.
+
+    The function enters a loop where it:
+      - Redraws the grid and message box each frame.
+      - Handles user events:
+        - QUIT: exits the application.
+        - KEYDOWN (space): closes the message box.
+        - MOUSEBUTTONDOWN: starts dragging if the message box is clicked, or closes if the close button is clicked.
+        - MOUSEBUTTONUP: stops dragging.
+        - MOUSEMOTION: moves the message box if dragging.
+
+    Args:
+        grid (list): The grid of nodes.
+        heuristics (list): List of heuristic functions used.
+        h_idx (int): Index of the heuristic used.
+    """    
+    font = pygame.font.SysFont(None, TEXT_SIZE)
+    text_color = (0, 114, 187)  # RGB
+    bg_color = (255, 255, 255, 200)  # RGBA
     msg = "Path found using heuristic '{}' (index {}) in {} steps.".format(
         heuristics[h_idx % len(heuristics)].__name__, h_idx % len(heuristics), Node.count_steps(grid))
-    text_surface = font.render(msg, True, text_color[:3])
-    text_bg = pygame.Surface(text_surface.get_size(), pygame.SRCALPHA)
-    text_bg.fill((255, 255, 255, 200))  # partially transparent background
-    text_bg.blit(text_surface, (0, 0))
-    text_bg.set_alpha(text_color[3])
+    text_sprite = TextSprite(msg, font, text_color, bg_color[:3], bg_color[3])
 
     # Initial position: center
-    x = (WIN.get_width() - text_bg.get_width()) // 2
-    y = (WIN.get_height() - text_bg.get_height()) // 2
-
-    dragging = False
-    offset_x, offset_y = 0, 0
-    waiting = True
-
-    while waiting:
-        WIN.fill(Node.RESET_RGB)
-        Node.draw_nodes(WIN, len(grid), grid, WIN.get_width())
-        WIN.blit(text_bg, (x, y))
-        pygame.display.update()
-
-        for e in pygame.event.get():
-            if e.type == pygame.QUIT:
-                pygame.quit()
-                return
-            if e.type == pygame.KEYDOWN:
-                if e.key == pygame.K_SPACE or e.key == pygame.K_ESCAPE:
-                    waiting = False
-            if e.type == pygame.MOUSEBUTTONDOWN:
-                mx, my = pygame.mouse.get_pos()
-                if x <= mx <= x + text_bg.get_width() and y <= my <= y + text_bg.get_height():
-                    dragging = True
-                    offset_x = mx - x
-                    offset_y = my - y
-            if e.type == pygame.MOUSEBUTTONUP:
-                dragging = False
-            if e.type == pygame.MOUSEMOTION and dragging:
-                mx, my = pygame.mouse.get_pos()
-                x = mx - offset_x
-                y = my - offset_y
-# def report_result
+    x = (WIN.get_width() - text_sprite.image.get_width()) // 2
+    y = (WIN.get_height() - text_sprite.image.get_height()) // 2
+    text_sprite.rect.topleft = (x, y)
+    text_sprite.show(WIN, grid)
 
 def main (win, width):
+    """
+    Runs the interactive visualization for the A* pathfinding algorithm.
+    This function initializes the grid and handles user interactions to set up the start and end nodes,
+    draw walls, generate random grids or mazes, and run the A* algorithm with selectable heuristics.
+    The visualization is rendered in a Pygame window, and users can interact using mouse clicks and keyboard shortcuts.
+    Parameters:
+        win (pygame.Surface): The Pygame window surface where the visualization is drawn.
+        width (int): The width of the window/grid in pixels.
+    Functionality:
+        - Left mouse click: Set the start node, end node, or draw walls.
+        - Right mouse click: Remove nodes (reset to empty).
+        - SPACE key: Run the A* algorithm using the current heuristic, cycling through available heuristics.
+        - C key: Clear the grid.
+        - 1-5 keys: Generate random grids with increasing wall density (10% to 50%).
+        - M key: Generate a random maze.
+        - R key: Reset the grid to its initial state.
+        - The result of the pathfinding is displayed in the application window.
+    The function runs in a loop until the user closes the window, handling all events and updating the visualization accordingly.
+    """
     ROWS    = WIDTH // NODE_WIDTH
     grid    = Node.make_grid(ROWS, width)
     start   = None
@@ -412,107 +520,127 @@ def main (win, width):
         clock.tick(FPS)
         Node.draw_nodes(win, ROWS, grid, width)        
         for event in pygame.event.get():
-            if event.type == pygame.QUIT :
-                run = False
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                return
 
-            if started :
+            if started:
                 continue
 
-            if pygame.mouse.get_pressed()[0] : # LEFT CLICK
-                pos         = pygame.mouse.get_pos()
-                row, col    = get_clicked_position(pos, ROWS, width)
-                node        = grid[row][col]
-                if not start and node != end :
+            if pygame.mouse.get_pressed()[0]:  # LEFT CLICK
+                pos = pygame.mouse.get_pos()
+                row, col = get_clicked_position(pos, ROWS, width)
+                node = grid[row][col]
+                if not start and node != end:
                     start = node
                     start.make_start()
-
                 elif not end and node != start:
                     end = node
                     end.make_end()
-
-                elif node != end and node != start :
+                elif node != end and node != start:
                     node.make_wall()
 
-            elif pygame.mouse.get_pressed()[2] : # RIGHT CLICK
-                pos         = pygame.mouse.get_pos()
-                row, col    = get_clicked_position(pos, ROWS, width)
-                node        = grid[row][col]
+            elif pygame.mouse.get_pressed()[2]:  # RIGHT CLICK
+                pos = pygame.mouse.get_pos()
+                row, col = get_clicked_position(pos, ROWS, width)
+                node = grid[row][col]
                 node.reset()
-                if node == start :
+                if node == start:
                     start = None
-                elif node == end :
+                elif node == end:
                     end = None
 
-            if event.type == pygame.KEYDOWN :
-                if event.key == pygame.K_SPACE and start and end : 
-                    if h_idx != 0 : 
-                        grid = Node.reset_grid(grid, True)             
-                    for row in grid :
-                        for node in row :
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_SPACE and start and end:
+                    if h_idx != 0:
+                        grid = Node.reset_grid(grid, True)
+                    for row in grid:
+                        for node in row:
                             node.update_neighbors(grid, ["RIGHT", "LEFT", "UP", "DOWN"]) if is_maze else node.update_neighbors(grid)
                     Node.run(grid, start, end, ROWS, width, heuristics[h_idx % len(heuristics)])
                     # Display result as a message in the application window
                     report_result(grid, heuristics, h_idx)
                     h_idx += 1
 
-                if event.key == pygame.K_c :
-                    start   = None
-                    end     = None
-                    grid    = Node.make_grid(ROWS, width)
-                    h_idx   = 0
+                if event.key == pygame.K_c:
+                    start = None
+                    end = None
+                    grid = Node.make_grid(ROWS, width)
+                    h_idx = 0
                     is_maze = False
 
-                if event.key == pygame.K_1 :
-                    start   = None
-                    end     = None
-                    grid    = Node.make_grid(ROWS, width, .1)
-                    h_idx   = 0
+                if event.key == pygame.K_1:
+                    start = None
+                    end = None
+                    grid = Node.make_grid(ROWS, width, .1)
+                    h_idx = 0
                     is_maze = False
 
-                if event.key == pygame.K_2 :
-                    start   = None
-                    end     = None
-                    grid    = Node.make_grid(ROWS, width, .2)
-                    h_idx   = 0
+                if event.key == pygame.K_2:
+                    start = None
+                    end = None
+                    grid = Node.make_grid(ROWS, width, .2)
+                    h_idx = 0
                     is_maze = False
 
-                if event.key == pygame.K_3 :
-                    start   = None
-                    end     = None
-                    grid    = Node.make_grid(ROWS, width, .3)
-                    h_idx   = 0
+                if event.key == pygame.K_3:
+                    start = None
+                    end = None
+                    grid = Node.make_grid(ROWS, width, .3)
+                    h_idx = 0
                     is_maze = False
 
-                if event.key == pygame.K_4 :
-                    start   = None
-                    end     = None
-                    grid    = Node.make_grid(ROWS, width, .4)
-                    h_idx   = 0
+                if event.key == pygame.K_4:
+                    start = None
+                    end = None
+                    grid = Node.make_grid(ROWS, width, .4)
+                    h_idx = 0
                     is_maze = False
 
-                if event.key == pygame.K_5 :
-                    start   = None
-                    end     = None
-                    grid    = Node.make_grid(ROWS, width, .5)
-                    h_idx   = 0
+                if event.key == pygame.K_5:
+                    start = None
+                    end = None
+                    grid = Node.make_grid(ROWS, width, .5)
+                    h_idx = 0
                     is_maze = False
 
-                if event.key == pygame.K_m :
-                    start   = None
-                    end     = None
-                    grid    = Node.make_maze(ROWS, width)
-                    h_idx   = 0
+                if event.key == pygame.K_m:
+                    start = None
+                    end = None
+                    grid = Node.make_maze(ROWS, width)
+                    h_idx = 0
                     is_maze = True
 
-                if event.key == pygame.K_r :
-                    start   = None
-                    end     = None
-                    grid    = Node.reset_grid(grid)
-                    h_idx   = 0
+                if event.key == pygame.K_r:
+                    start = None
+                    end = None
+                    grid = Node.reset_grid(grid)
+                    h_idx = 0
+
+                if event.key == pygame.K_h:
+                    help_lines = [
+                        "A* Pathfinding Help:",
+                        "Left Click: Set start, end, or draw walls",
+                        "Right Click: Remove node/reset",
+                        "SPACE: Run A* (cycles heuristics)",
+                        "C: Clear grid",
+                        "1-5: Random grid (10%-50% walls)",
+                        "M: Generate maze",
+                        "R: Reset grid",
+                        "H: Show this help",
+                        "Close window: Quit"
+                    ]
+                    font = pygame.font.SysFont(None, 18)
+                    text_color = (0, 0, 0)
+                    bg_color = (255, 255, 255, 220)
+                    multi_text_sprite = MultiTextSprite(help_lines, font, text_color, bg_color[:3], bg_color[3])
+                    x = (WIN.get_width() - multi_text_sprite.image.get_width()) // 2
+                    y = (WIN.get_height() - multi_text_sprite.image.get_height()) // 2
+                    multi_text_sprite.rect.topleft = (x, y)
+                    multi_text_sprite.show(WIN, grid)
 
     pygame.quit()
-
-
+    return
 #end main
 
 main(WIN, WIDTH)
