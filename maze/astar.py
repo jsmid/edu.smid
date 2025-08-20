@@ -357,6 +357,21 @@ def get_clicked_position (pos, rows, width):
 
 class TextSprite(pygame.sprite.Sprite):
     def __init__(self, text, font, color, bg_color, alpha):
+        """ Initializes a TextSprite object that displays a text label with a customizable font, 
+        text color, background color, and alpha transparency, and includes a close button 
+        rendered as an 'X' with a transparent background. The method creates a Pygame surface 
+        sized to fit the text, padding, and the close button, fills it with the specified 
+        background color and alpha, draws the text at the appropriate position, and adds the close button. 
+        The resulting surface is assigned to the sprite's image attribute, 
+        and its rect attribute is set accordingly.
+
+        Args:
+            text (str): The text to display in the sprite.
+            font (pygame.font.Font): The font to use for rendering the text.
+            color (tuple): The color of the text as an RGB tuple.
+            bg_color (tuple): The background color of the sprite as an RGB tuple.
+            alpha (int): The alpha transparency value for the sprite (0-255).
+        """
         super().__init__()
         text_surface = font.render(text, True, color)
         padding = 10
@@ -374,6 +389,27 @@ class TextSprite(pygame.sprite.Sprite):
         self.rect = self.image.get_rect()
 
     def draw_close_button(self, padding, button_size, width):
+        """
+        Draws a close ('X') button on the surface image of the object.
+
+        This method creates a rectangular area in the top-right corner of the surface, 
+        sized according to `button_size` and offset by `padding`. The rectangle itself 
+        is not filled or outlined; instead, two diagonal red lines are drawn within 
+        the rectangle to form an 'X', visually representing a close button. The 
+        position and size of the button are dynamically calculated based on the 
+        provided `width`, `button_size`, and `padding` parameters. The rectangle's 
+        coordinates are stored in `self.close_rect` for later use, such as detecting 
+        mouse clicks.
+
+        Args:
+            padding (int): The space in pixels between the button and the edges of the surface.
+            button_size (int): The width and height of the square close button in pixels.
+            width (int): The total width of the surface on which the button is drawn.
+
+        Side Effects:
+            - Updates `self.close_rect` with the position and size of the close button.
+            - Draws two red diagonal lines on `self.image` to form the 'X' symbol.
+        """
         self.close_rect = pygame.Rect(width - button_size - padding // 2, padding // 2, button_size, button_size)
         # No rectangle fill, just draw 'X'
         x_margin = 6
@@ -389,26 +425,61 @@ class TextSprite(pygame.sprite.Sprite):
         )
 
     def is_close_clicked(self, mouse_pos):
+        """
+        Determines whether the close button of the sprite was clicked based on the mouse position.
+
+        This method checks if a mouse click occurred within the bounds of the close button (represented by `self.close_rect`)
+        of the sprite. The `mouse_pos` parameter is expected to be a tuple containing the x and y coordinates of the mouse
+        relative to the entire window or screen. The method first converts these coordinates to be relative to the top-left
+        corner of the sprite by subtracting the sprite's position (`self.rect.x` and `self.rect.y`). It then checks if the
+        resulting relative coordinates fall within the area defined by `self.close_rect`, which represents the clickable
+        region for closing the sprite (such as a close or "X" button).
+
+        Args:
+            mouse_pos (tuple): The (x, y) position of the mouse click, relative to the window or screen.
+
+        Returns:
+            bool: True if the close button was clicked, False otherwise.
+        """
         # mouse_pos is relative to the sprite's top-left
         rel_x = mouse_pos[0] - self.rect.x
         rel_y = mouse_pos[1] - self.rect.y
         return self.close_rect.collidepoint(rel_x, rel_y)
 
-    # Move the message box event loop into a method of TextSprite
     def show(self, win, grid):
-        """ Displays the text sprite in the given window and updates the grid.
-        This method is called to show the message box with the result of the pathfinding.
+        """
+        Displays the current node's image in a draggable window and handles user interaction.
+        This method creates an interactive window using Pygame, where the node's image is displayed
+        on top of the provided grid. The window supports the following interactions:
+          - The user can drag the node's image around the window by clicking and holding the mouse button
+            on the image, then moving the mouse.
+          - The user can close the window by clicking a designated "close" area on the image (as determined
+            by `self.is_close_clicked`), or by pressing the SPACE key.
+          - The window will also close if the user closes the Pygame window.
+        The method continuously redraws the grid and the node's image until the user performs an action
+        to exit. It updates the display only within the area occupied by the node's image for efficiency.
         Args:
-            win (pygame.Surface): The Pygame window surface where the message box is drawn.
-            grid (list): The grid of nodes to be displayed."""
+            win (pygame.Surface): The Pygame surface (window) where the grid and node image are drawn.
+            grid (list): The grid data structure representing the maze or environment.
+        Side Effects:
+            - Updates the Pygame window with the node's image and grid.
+            - Handles user input events for dragging and closing the window.
+            - May terminate the Pygame application if the window is closed.
+        """
         dragging = False
         offset_x, offset_y = 0, 0
         waiting = True
+        # Draw the grid once and keep as background to avoid flicker
+        background = pygame.Surface(win.get_size())
+        Node.draw_nodes(background, len(grid), grid, win.get_width())
+        prev_rect = self.rect.copy()
         while waiting:
-            win.fill(Node.RESET_RGB)
-            Node.draw_nodes(win, len(grid), grid, win.get_width())
+            # Restore background only under the previous sprite rect to erase old position
+            win.blit(background, prev_rect, prev_rect)
+            # Draw the sprite at the new position
             win.blit(self.image, self.rect)
-            pygame.display.update(self.rect)
+            pygame.display.update([prev_rect, self.rect])
+            prev_rect = self.rect.copy()
 
             for e in pygame.event.get():
                 if e.type == pygame.QUIT:
