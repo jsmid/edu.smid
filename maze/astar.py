@@ -1,8 +1,8 @@
 from queue import PriorityQueue
 import math
 import random
-
 import pygame
+import sys
 
 pygame.init()  # Ensure pygame is initialized before using any pygame functions
 
@@ -11,8 +11,56 @@ NODE_WIDTH      = 6 # Width of a single node in pixels
 WIN             = pygame.display.set_mode(size=(WIDTH, WIDTH))
 FPS             = 40
 SPEED_MS        = 5
-TEXT_SIZE       = 28
+TEXT_SIZE       = 16
+# Window transparency for the result message box (0=fully transparent, 255=opaque)
+WND_TRANSPARENCY = 220
 
+# You can list available system fonts using pygame.font.get_fonts()
+    # Example: print(pygame.font.get_fonts())
+    # To use a specific font, pass its name as the first argument to SysFont, e.g.:
+    # font = pygame.font.SysFont("arial", TEXT_SIZE)
+    #
+    # ['arial', 'arialblack', 'bahnschrift', 'calibri', 'cambria', 'cambriamath', 'candara', 'comicsansms', 
+    # 'consolas', 'constantia', 'corbel', 'couriernew', 'ebrima', 'franklingothicmedium', 'gabriola', 'gadugi', 
+    # 'georgia', 'impact', 'inkfree', 'javanesetext', 'leelawadeeui', 'leelawadeeuisemilight', 'lucidaconsole', 
+    # 'lucidasans', 'malgungothic', 'malgungothicsemilight', 'microsofthimalaya', 'microsoftjhenghei', 
+    # 'microsoftjhengheiui', 'microsoftnewtailue', 'microsoftphagspa', 'microsoftsansserif', 'microsofttaile', 
+    # 'microsoftyahei', 'microsoftyaheiui', 'microsoftyibaiti', 'mingliuextb', 'pmingliuextb', 'mingliuhkscsextb', 
+    # 'mongolianbaiti', 'msgothic', 'msuigothic', 'mspgothic', 'mvboli', 'myanmartext', 'nirmalaui', 'nirmalauisemilight', 
+    # 'nirmalatext', 'nirmalatextsemilight', 'palatinolinotype', 'sansserifcollection', 'segoefluenticons', 'segoemdl2assets', 
+    # 'segoeprint', 'segoescript', 'segoeui', 'segoeuiblack', 'segoeuiemoji', 'segoeuihistoric', 'segoeuisemibold', 
+    # 'segoeuisemilight', 'segoeuisymbol', 'segoeuivariable', 'simsun', 'nsimsun', 'simsunextb', 'sitkatext', 'sylfaen', 
+    # 'symbol', 'tahoma', 'timesnewroman', 'trebuchetms', 'verdana', 'webdings', 'wingdings', 'yugothic', 'yugothicuisemibold', 
+    # 'yugothicui', 'yugothicmedium', 'yugothicuiregular', 'yugothicregular', 'yugothicuisemilight', 'simsunextg', 'agencyfbtučné', 
+    # 'agencyfb', 'algerian', 'bookantiquatučné', 'bookantiquatučnékurzíva', 'bookantiquakurzíva', 'arialtučné', 'arialtučnékurzíva', 
+    # 'arialkurzíva', 'arialrounded', 'baskervilleoldface', 'bauhaus93', 'bell', 'belltučné', 'bellkurzíva', 'bernardcondensed', 
+    # 'bookantiqua', 'bodonitučné', 'bodonitučnékurzíva', 'bodoniblackkurzíva', 'bodoniblack', 'bodonicondensedtučné', 
+    # 'bodonicondensedtučnékurzíva', 'bodonicondensedkurzíva', 'bodonicondensed', 'bodonikurzíva', 'bodonipostercompressed', 
+    # 'bodoni', 'bookmanoldstyle', 'bookmanoldstyletučné', 'bookmanoldstyletučnékurzíva', 'bookmanoldstylekurzíva', 
+    # 'bradleyhanditc', 'britannic', 'berlinsansfbtučné', 'berlinsansfbdemitučné', 'berlinsansfb', 'broadway', 'brushscriptkurzíva', 
+    # 'bookshelfsymbol7', 'californianfbtučné', 'californianfbkurzíva', 'californianfb', 'calisto', 'calistotučné', 
+    # 'calistotučnékurzíva', 'calistokurzíva', 'castellar', 'centuryschoolbook', 'centaur', 'century', 'chiller', 
+    # 'colonna', 'cooperblack', 'copperplategothic', 'curlz', 'dubai', 'dubaimedium', 'dubairegular', 'elephant', 
+    # 'elephantkurzíva', 'engravers', 'erasitc', 'erasdemiitc', 'erasmediumitc', 'felixtitling', 'forte', 'franklingothicbook', 
+    # 'franklingothicbookkurzíva', 'franklingothicdemi', 'franklingothicdemicond', 'franklingothicdemikurzíva', 
+    # 'franklingothicheavy', 'franklingothicheavykurzíva', 'franklingothicmediumcond', 'freestylescript', 'frenchscript', 
+    # 'footlight', 'garamond', 'garamondtučné', 'garamondkurzíva', 'gigi', 'gillsanstučnékurzíva', 'gillsanstučné', 
+    # 'gillsanscondensed', 'gillsanskurzíva', 'gillsansultracondensed', 'gillsansultra', 'gillsans', 'gloucesterextracondensed', 
+    # 'gillsansextcondensed', 'centurygothic', 'centurygothictučné', 'centurygothictučnékurzíva', 'centurygothickurzíva', 
+    # 'goudyoldstyle', 'goudyoldstyletučné', 'goudyoldstylekurzíva', 'goudystout', 'harlowsolid', 'harrington', 'haettenschweiler', 
+    # 'hightowertext', 'hightowertextkurzíva', 'imprintshadow', 'informalroman', 'blackadderitc', 'edwardianscriptitc', 'kristenitc', 
+    # 'jokerman', 'juiceitc', 'kunstlerscript', 'widelatin', 'lucidabright', 'lucidacalligraphy', 'leelawadee', 'leelawadeetučné', 
+    # 'lucidafaxregular', 'lucidafax', 'lucidahandwriting', 'lucidasansregular', 'lucidasansroman', 'lucidasanstypewriterregular', 
+    # 'lucidasanstypewriter', 'lucidasanstypewriteroblique', 'magnetotučné', 'maiandragd', 'maturascriptcapitals', 'mistral', 
+    # 'modernno20', 'microsoftuighurtučné', 'microsoftuighur', 'monotypecorsiva', 'extra', 'niagaraengraved', 'niagarasolid', 
+    # 'ocraextended', 'oldenglishtext', 'onyx', 'msoutlook', 'palacescript', 'papyrus', 'parchment', 'perpetuatučnékurzíva', 
+    # 'perpetuatučné', 'perpetuakurzíva', 'perpetuatitlingtučné', 'perpetuatitling', 'perpetua', 'playbill', 'poorrichard', 
+    # 'pristina', 'rage', 'ravie', 'msreferencesansserif', 'msreferencespecialty', 'rockwellcondensedtučné', 'rockwellcondensed', 
+    # 'rockwell', 'rockwelltučné', 'rockwelltučnékurzíva', 'rockwellextra', 'rockwellkurzíva', 'centuryschoolbooktučné', 
+    # 'centuryschoolbooktučnékurzíva', 'centuryschoolbookkurzíva', 'script', 'showcardgothic', 'snapitc', 'stencil', 
+    # 'twcentučnékurzíva', 'twcentučné', 'twcencondensedtučné', 'twcencondensedextra', 'twcencondensed', 'twcenkurzíva', 
+    # 'twcen', 'tempussansitc', 'vinerhanditc', 'vivaldikurzíva', 'vladimirscript', 'wingdings2', 'wingdings3']
+APP_FONT_NAME   = 'georgia' # Use default font
 pygame.font.init()
 pygame.display.set_caption("A* Path Finding Algorithm")
 clock = pygame.time.Clock()
@@ -109,7 +157,7 @@ class Node(pygame.sprite.Sprite):
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     pygame.quit()
-                    return
+                    sys.exit()
 
             current = open_set.get()[2]
             open_set_hash.remove(current)
@@ -484,7 +532,7 @@ class TextSprite(pygame.sprite.Sprite):
             for e in pygame.event.get():
                 if e.type == pygame.QUIT:
                     pygame.quit()
-                    return
+                    sys.exit()
                 if e.type == pygame.KEYDOWN and e.key == pygame.K_SPACE:
                     waiting = False
                 if e.type == pygame.MOUSEBUTTONDOWN:
@@ -544,9 +592,9 @@ def report_result(grid, heuristics, h_idx):
         heuristics (list): List of heuristic functions used.
         h_idx (int): Index of the heuristic used.
     """    
-    font = pygame.font.SysFont(None, TEXT_SIZE)
+    font = pygame.font.SysFont(APP_FONT_NAME, TEXT_SIZE)
     text_color = (0, 114, 187)  # RGB
-    bg_color = (255, 255, 255, 200)  # RGBA
+    bg_color = (255, 255, 255, WND_TRANSPARENCY)  # RGBA
     msg = "Path found using heuristic '{}' (index {}) in {} steps.".format(
         heuristics[h_idx % len(heuristics)].__name__, h_idx % len(heuristics), Node.count_steps(grid))
     text_sprite = TextSprite(msg, font, text_color, bg_color[:3], bg_color[3])
@@ -593,7 +641,7 @@ def main (win, width):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
-                return
+                sys.exit()
 
             if started:
                 continue
@@ -701,9 +749,9 @@ def main (win, width):
                         "H: Show this help",
                         "Close window: Quit"
                     ]
-                    font = pygame.font.SysFont(None, 18)
+                    font = pygame.font.SysFont(APP_FONT_NAME, TEXT_SIZE//4*3)
                     text_color = (0, 0, 0)
-                    bg_color = (255, 255, 255, 220)
+                    bg_color = (255, 255, 255, WND_TRANSPARENCY)
                     multi_text_sprite = MultiTextSprite(help_lines, font, text_color, bg_color[:3], bg_color[3])
                     x = (WIN.get_width() - multi_text_sprite.image.get_width()) // 2
                     y = (WIN.get_height() - multi_text_sprite.image.get_height()) // 2
@@ -711,7 +759,7 @@ def main (win, width):
                     multi_text_sprite.show(WIN, grid)
 
     pygame.quit()
-    return
+    sys.exit()
 #end main
 
 main(WIN, WIDTH)
