@@ -127,7 +127,7 @@ int main()
 
     // create the particle system
     ParticleSystem particles(2000, 5);
-    IndigoParticleSystem staticParticles(3000, 3);
+    IndigoParticleSystem staticParticles(3000, 7);
     staticParticles.setEmitter({0, 300});
     EmeraldParticleSystem mirroringParticles(2500, 4);
     mirroringParticles.setEmitter({800, 300});
