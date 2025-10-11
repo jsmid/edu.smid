@@ -4,17 +4,75 @@
 #include <random>
 #include <ctime>
 
+class AbstractEmitter {
+public:
+    virtual ~AbstractEmitter() = default;
+    virtual sf::Vector2f getPosition() = 0;
+};
+
+class StaticEmitter : public AbstractEmitter
+{   
+public:
+    StaticEmitter(sf::Vector2f position) 
+        : m_position(position)
+    {
+    }
+
+    sf::Vector2f getPosition() override
+    {
+        return m_position;          
+    }
+private:
+    sf::Vector2f m_position;
+};  
+
+
+class FollowTheMouseEmitter : public AbstractEmitter
+{   
+public:
+    FollowTheMouseEmitter(sf::RenderWindow &window) 
+        : m_window(window)
+    {
+    }
+
+    sf::Vector2f getPosition() override
+    {
+        sf::Vector2i mouse = sf::Mouse::getPosition(m_window);
+        return m_window.mapPixelToCoords(mouse);      
+    }
+private:
+    sf::RenderWindow &m_window;
+};  
+
+class MirroringEmitter : public AbstractEmitter
+{   
+public:
+    MirroringEmitter(sf::RenderWindow &window) 
+        : m_window(window)
+    {
+    }
+
+    sf::Vector2f getPosition() override
+    {
+        sf::Vector2i mouse = sf::Mouse::getPosition(m_window);
+        return m_window.mapPixelToCoords(sf::Vector2i(mouse.y, mouse.x));   
+    }
+private:
+    sf::RenderWindow &m_window;
+};
+
 class ParticleSystem : public sf::Drawable, public sf::Transformable
 {
 public:
-    ParticleSystem(unsigned int count, unsigned int maxLifetimeSeconds) : m_particles(count), m_vertices(sf::PrimitiveType::Points, count)
+    ParticleSystem(unsigned int count, unsigned int maxLifetimeSeconds, AbstractEmitter& emitter)
+        : m_particles(count), m_vertices(sf::PrimitiveType::Points, count), m_emitter(emitter)
     {
         m_lifetime = sf::seconds(maxLifetimeSeconds);
     }
 
-    void setEmitter(sf::Vector2f position)
+    void updatePosition()
     {
-        m_emitter = position;
+        m_position = m_emitter.getPosition();
     }
 
     void update(sf::Time elapsed)
@@ -78,19 +136,21 @@ private:
         m_particles[index].lifetime = sf::milliseconds(std::uniform_int_distribution(1000, m_lifetime.asMilliseconds())(rng));
 
         // reset the position of the corresponding vertex
-        m_vertices[index].position = m_emitter;
+        m_vertices[index].position = m_position;
     }
 
     std::vector<Particle> m_particles;
     sf::VertexArray       m_vertices;
     sf::Time              m_lifetime;
-    sf::Vector2f          m_emitter;
+    sf::Vector2f          m_position;
+    AbstractEmitter&      m_emitter;
 };
 
 class IndigoParticleSystem : public ParticleSystem
 {   
 public:
-    IndigoParticleSystem(unsigned int count, unsigned int maxLifetimeSeconds) : ParticleSystem(count, maxLifetimeSeconds)
+    IndigoParticleSystem(unsigned int count, unsigned int maxLifetimeSeconds, AbstractEmitter& emitter)
+        : ParticleSystem(count, maxLifetimeSeconds, emitter)
     {
     }   
 
@@ -107,7 +167,8 @@ protected:
 class EmeraldParticleSystem : public ParticleSystem
 {   
 public:
-    EmeraldParticleSystem(unsigned int count, unsigned int maxLifetimeSeconds) : ParticleSystem(count, maxLifetimeSeconds)
+    EmeraldParticleSystem(unsigned int count, unsigned int maxLifetimeSeconds, AbstractEmitter& emitter)
+        : ParticleSystem(count, maxLifetimeSeconds, emitter)
     {
     }
 protected:
@@ -123,14 +184,18 @@ protected:
 int main()
 {
     // create the window
-    sf::RenderWindow window(sf::VideoMode({800, 600}), "Particles");
+    sf::RenderWindow window(sf::VideoMode({800, 800}), "Particles");
+    // Static Emmiter 
+    StaticEmitter staticEmitter(sf::Vector2f(400, 200));
+    // create the emitter
+    FollowTheMouseEmitter mouseEmitter(window);
+    // Mirroring Emitter 
+    MirroringEmitter mirroringEmitter(window);
 
     // create the particle system
-    ParticleSystem particles(2000, 5);
-    IndigoParticleSystem staticParticles(3000, 7);
-    staticParticles.setEmitter({0, 300});
-    EmeraldParticleSystem mirroringParticles(2500, 4);
-    mirroringParticles.setEmitter({800, 300});
+    ParticleSystem particles(10000, 5, mouseEmitter);
+    IndigoParticleSystem staticParticles(10000, 7, staticEmitter);
+    EmeraldParticleSystem mirroringParticles(10000, 4, mirroringEmitter);
 
     // create a clock to track the elapsed time
     sf::Clock clock;
@@ -146,14 +211,16 @@ int main()
         }
 
         // make the particle system emitter follow the mouse
-        sf::Vector2i mouse = sf::Mouse::getPosition(window);
-        particles.setEmitter(window.mapPixelToCoords(mouse));
+        sf::Vector2i mouse = sf::Mouse::getPosition(window);        
+        // particles.setPosition(window.mapPixelToCoords(mouse));
 
         // update it
         sf::Time elapsed = clock.restart();
+        particles.updatePosition();
+        staticParticles.updatePosition();
+        mirroringParticles.updatePosition();
         particles.update(elapsed);
-        staticParticles.update(elapsed);
-        mirroringParticles.setEmitter(mirroringParticles.getPosition() - window.mapPixelToCoords(mouse) + sf::Vector2f(800, 600));
+        staticParticles.update(elapsed);        
         mirroringParticles.update(elapsed);
 
         // draw it
