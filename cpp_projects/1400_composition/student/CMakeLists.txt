@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.15)
 project(student LANGUAGES CXX)
 
+# Add the subdirectory containing the libraries
+add_subdirectory(../studentlib studentlib)
+add_subdirectory(../arrayslib arrayslib)
+
 # Create the executable
 add_executable(${PROJECT_NAME} main.cpp)
 
