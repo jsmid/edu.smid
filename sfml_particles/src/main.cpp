@@ -67,11 +67,15 @@ public:
     ParticleSystem(unsigned int count, unsigned int maxLifetimeSeconds, AbstractEmitter& emitter)
         : m_particles(count), m_vertices(sf::PrimitiveType::Points, count), m_emitter(emitter)
     {
+        if (maxLifetimeSeconds < 1)
+            maxLifetimeSeconds = 1; // prevent liftime that is lower than 1 second
         m_lifetime = sf::seconds(maxLifetimeSeconds);
     }
 
-    void updatePosition()
+    
+    void updatePosition()    
     {
+        // Update the position of the emitter
         m_position = m_emitter.getPosition();
     }
 
@@ -87,7 +91,14 @@ public:
             if (p.lifetime <= sf::Time::Zero)
                 resetParticle(i);
 
-            // update the position of the corresponding vertex
+            // Update the position of the corresponding vertex according to its velocity
+            // new position = old position + velocity * elapsed time
+            // Velocity is a vector from polar coordinates, angle + speed so we can use it directly
+            // elapsed.asSeconds() gives the elapsed time in seconds as a float
+            // We multiply the velocity by the elapsed time to get the displacement
+            // then we add it to the current position. Displacement is another vector, x and y in pixels
+            // Note: as velocity is in pixels per second, multiplying by seconds gives pixels
+            // which is the correct unit for position
             m_vertices[i].position += p.velocity * elapsed.asSeconds();
 
             // update the alpha (transparency) of the particle according to its lifetime
@@ -123,6 +134,7 @@ private:
         target.draw(m_vertices, states);
     }
 
+
     void resetParticle(std::size_t index)
     {
         // create random number generator
@@ -132,18 +144,19 @@ private:
         // give a random velocity and lifetime to the particle
         const sf::Angle angle       = sf::degrees(std::uniform_real_distribution(0.f, 360.f)(rng));
         const float     speed       = std::uniform_real_distribution(50.f, 100.f)(rng);
-        m_particles[index].velocity = sf::Vector2f(speed, angle);
+        // velocity from polar coordinates, angle + speed 
+        m_particles[index].velocity = sf::Vector2f(speed, angle);  
         m_particles[index].lifetime = sf::milliseconds(std::uniform_int_distribution(1000, m_lifetime.asMilliseconds())(rng));
 
         // reset the position of the corresponding vertex
         m_vertices[index].position = m_position;
     }
 
-    std::vector<Particle> m_particles;
-    sf::VertexArray       m_vertices;
-    sf::Time              m_lifetime;
-    sf::Vector2f          m_position;
-    AbstractEmitter&      m_emitter;
+    std::vector<Particle> m_particles; // the particles
+    sf::VertexArray       m_vertices;  // the array of vertices that defines the particles
+    sf::Time              m_lifetime;  // lifetime of a particle
+    sf::Vector2f          m_position;  // current position of the emitter
+    AbstractEmitter&      m_emitter;   // reference to the emitter
 };
 
 class IndigoParticleSystem : public ParticleSystem
@@ -187,6 +200,7 @@ int main()
     sf::RenderWindow window(sf::VideoMode({800, 800}), "Particles");
     // Static Emmiter 
     StaticEmitter staticEmitter(sf::Vector2f(400, 200));
+    StaticEmitter staticEmitter2(sf::Vector2f(200, 400));
     // create the emitter
     FollowTheMouseEmitter mouseEmitter(window);
     // Mirroring Emitter 
@@ -194,8 +208,9 @@ int main()
 
     // create the particle system
     ParticleSystem particles(10000, 5, mouseEmitter);
-    IndigoParticleSystem staticParticles(10000, 7, staticEmitter);
+    IndigoParticleSystem staticParticles(10000, 3, staticEmitter);
     EmeraldParticleSystem mirroringParticles(10000, 4, mirroringEmitter);
+    ParticleSystem staticParticles2(10000, 6, staticEmitter2);
 
     // create a clock to track the elapsed time
     sf::Clock clock;
@@ -219,15 +234,18 @@ int main()
         particles.updatePosition();
         staticParticles.updatePosition();
         mirroringParticles.updatePosition();
+        staticParticles2.updatePosition();
         particles.update(elapsed);
         staticParticles.update(elapsed);        
         mirroringParticles.update(elapsed);
+        staticParticles2.update(elapsed);
 
         // draw it
         window.clear();
         window.draw(particles);
         window.draw(staticParticles);
         window.draw(mirroringParticles);
+        window.draw(staticParticles2);
         window.display();
     }
 }
