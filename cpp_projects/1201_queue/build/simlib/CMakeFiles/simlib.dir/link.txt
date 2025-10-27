@@ -1,2 +1,0 @@
-C:\MinGW\bin\ar.exe qc libsimlib.a CMakeFiles/simlib.dir/src/customer.cpp.obj CMakeFiles/simlib.dir/src/queue.cpp.obj
-C:\MinGW\bin\ranlib.exe libsimlib.a

@@ -1,4 +1,5 @@
-project(student)
+cmake_minimum_required(VERSION 3.15)
+project(student LANGUAGES CXX)
 
 # Create the executable
 add_executable(${PROJECT_NAME} main.cpp)

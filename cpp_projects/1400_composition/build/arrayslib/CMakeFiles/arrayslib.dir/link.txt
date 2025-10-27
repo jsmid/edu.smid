@@ -1,2 +1,0 @@
-C:\MinGW\bin\ar.exe qc libarrayslib.a CMakeFiles/arrayslib.dir/src/arraydb.cpp.obj
-C:\MinGW\bin\ranlib.exe libarrayslib.a
