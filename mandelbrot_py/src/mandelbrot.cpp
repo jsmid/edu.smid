@@ -135,65 +135,158 @@ public:
 
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Colour utilities
+//  Colour map utilities
 // ─────────────────────────────────────────────────────────────────────────────
 struct RGB { float r, g, b; };
 struct HSV { float h, s, v; };
 
+class ColourMap {
+public:
+    virtual ~ColourMap() = default;
+
+    virtual std::string name() const = 0;
+    virtual RGB operator()(float t) const = 0;
+
+    /** Convert an RGB colour to HSV.
+     *  RGB components are in [0,1].
+     *  Returns HSV with H in [0,1], S in [0,1], V in [0,1].
+     */
+    static HSV rgb_to_hsv(RGB c)
+    {
+        float mx = std::max({ c.r, c.g, c.b });
+        float mn = std::min({ c.r, c.g, c.b });
+        float d  = mx - mn;
+        if (mx < 1e-7f) return { 0.f, 0.f, 0.f };
+        float h = 0.f;
+        if (d > 1e-7f) {
+            if      (c.r >= mx) h = (c.g - c.b) / d;
+            else if (c.g >= mx) h = 2.f + (c.b - c.r) / d;
+            else                h = 4.f + (c.r - c.g) / d;
+            h /= 6.f;
+            if (h < 0.f) h += 1.f;
+        }
+        return { h, d / mx, mx };
+    }
+
+    /** Convert an HSV colour to RGB.
+     *  HSV components are in [0,1].
+     *  Returns RGB with R, G, B in [0,1].
+     */
+    static RGB hsv_to_rgb(HSV c)
+    {
+        if (c.s < 1e-7f) return { c.v, c.v, c.v };
+        float h6 = c.h * 6.f;
+        int   i  = static_cast<int>(h6) % 6;
+        float f  = h6 - std::floor(h6);
+        float p  = c.v * (1.f - c.s);
+        float q  = c.v * (1.f - c.s * f);
+        float t  = c.v * (1.f - c.s * (1.f - f));
+        switch (i) {
+            case 0:  return { c.v,   t,   p };
+            case 1:  return {   q, c.v,   p };
+            case 2:  return {   p, c.v,   t };
+            case 3:  return {   p,   q, c.v };
+            case 4:  return {   t,   p, c.v };
+            default: return { c.v,   p,   q };
+        }
+    }
+};
+
 // matplotlib 'hot' colormap  (dark grey → red → yellow → white)
 // Breakpoints from the matplotlib source: 0, 0.3657, 0.7461, 1.0
-RGB hot_colormap(float t)
-{
-    t = std::clamp(t, 0.f, 1.f);
-    constexpr float P1 = 0.3657f, P2 = 0.7461f;
-    if (t < P1) return { 0.2f + 0.8f * t / P1,                     0.f,              0.f };
-    if (t < P2) return {      1.f, (t - P1) / (P2 - P1),              0.f };
-                return {      1.f,                    1.f, (t-P2)/(1.f-P2) };
-}
+class Hot : public ColourMap {
+public:
+    std::string name() const override { return "Hot"; }
 
-/** Convert an RGB colour to HSV.
- *  RGB components are in [0,1].
- *  Returns HSV with H in [0,1], S in [0,1], V in [0,1].
- */
-HSV rgb_to_hsv(RGB c)
-{
-    float mx = std::max({ c.r, c.g, c.b });
-    float mn = std::min({ c.r, c.g, c.b });
-    float d  = mx - mn;
-    if (mx < 1e-7f) return { 0.f, 0.f, 0.f };
-    float h = 0.f;
-    if (d > 1e-7f) {
-        if      (c.r >= mx) h = (c.g - c.b) / d;
-        else if (c.g >= mx) h = 2.f + (c.b - c.r) / d;
-        else                h = 4.f + (c.r - c.g) / d;
-        h /= 6.f;
-        if (h < 0.f) h += 1.f;
+    RGB operator()(float t) const override
+    {
+        t = std::clamp(t, 0.f, 1.f);
+        constexpr float P1 = 0.3657f, P2 = 0.7461f;
+        if (t < P1) return { 0.2f + 0.8f * t / P1,                     0.f,              0.f };
+        if (t < P2) return {      1.f, (t - P1) / (P2 - P1),              0.f };
+                    return {      1.f,                    1.f, (t-P2)/(1.f-P2) };
     }
-    return { h, d / mx, mx };
-}
+};
 
-/** Convert an HSV colour to RGB.
- *  HSV components are in [0,1].
- *  Returns RGB with R, G, B in [0,1].
- */
-RGB hsv_to_rgb(HSV c)
-{
-    if (c.s < 1e-7f) return { c.v, c.v, c.v };
-    float h6 = c.h * 6.f;
-    int   i  = static_cast<int>(h6) % 6;
-    float f  = h6 - std::floor(h6);
-    float p  = c.v * (1.f - c.s);
-    float q  = c.v * (1.f - c.s * f);
-    float t  = c.v * (1.f - c.s * (1.f - f));
-    switch (i) {
-        case 0:  return { c.v,   t,   p };
-        case 1:  return {   q, c.v,   p };
-        case 2:  return {   p, c.v,   t };
-        case 3:  return {   p,   q, c.v };
-        case 4:  return {   t,   p, c.v };
-        default: return { c.v,   p,   q };
+// matplotlib-style 'ice' colormap
+// A cool blue-white ramp intended to read as frozen water/ice.
+class Ice : public ColourMap {
+public:
+    std::string name() const override { return "Ice"; }
+
+    RGB operator()(float t) const override
+    {
+        t = std::clamp(t, 0.f, 1.f);
+
+        auto lerp = [](float a, float b, float u) {
+            return a + (b - a) * u;
+        };
+
+        if (t < 0.40f) {
+            const float u = t / 0.40f;
+            return {
+                lerp(0.02f, 0.00f, u),
+                lerp(0.08f, 0.55f, u),
+                lerp(0.32f, 0.95f, u)
+            };
+        }
+        if (t < 0.78f) {
+            const float u = (t - 0.40f) / 0.38f;
+            return {
+                lerp(0.00f, 0.68f, u),
+                lerp(0.55f, 0.92f, u),
+                lerp(0.95f, 1.00f, u)
+            };
+        }
+
+        const float u = (t - 0.78f) / 0.22f;
+        return {
+            lerp(0.68f, 1.00f, u),
+            lerp(0.92f, 1.00f, u),
+            lerp(1.00f, 1.00f, u)
+        };
     }
-}
+};
+
+// matplotlib-style 'amber' colormap
+// A warm amber-to-gold ramp intended to read as glowing resin/metal.
+class Amber : public ColourMap {
+public:
+    std::string name() const override { return "Amber"; }
+
+    RGB operator()(float t) const override
+    {
+        t = std::clamp(t, 0.f, 1.f);
+
+        auto lerp = [](float a, float b, float u) {
+            return a + (b - a) * u;
+        };
+
+        if (t < 0.34f) {
+            const float u = t / 0.34f;
+            return {
+                lerp(0.12f, 0.72f, u),
+                lerp(0.05f, 0.32f, u),
+                lerp(0.00f, 0.02f, u)
+            };
+        }
+        if (t < 0.72f) {
+            const float u = (t - 0.34f) / 0.38f;
+            return {
+                lerp(0.72f, 0.98f, u),
+                lerp(0.32f, 0.64f, u),
+                lerp(0.02f, 0.08f, u)
+            };
+        }
+
+        const float u = (t - 0.72f) / 0.28f;
+        return {
+            lerp(0.98f, 1.00f, u),
+            lerp(0.64f, 0.94f, u),
+            lerp(0.08f, 0.76f, u)
+        };
+    }
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  View bounds in the complex plane
@@ -250,7 +343,7 @@ int adaptive_maxiter(int baseIter, const Viewport& vp)
 //  
 // ─────────────────────────────────────────────────────────────────────────────
 void render(sf::Image& img, const Viewport& vp, int maxiter, long double horizon,
-            const FractalSequence& seq)
+            const FractalSequence& seq, const ColourMap& colour_map)
 {
     const unsigned W = img.getSize().x;
     const unsigned H = img.getSize().y;
@@ -366,10 +459,10 @@ void render(sf::Image& img, const Viewport& vp, int maxiter, long double horizon
             // This allows the colour to retain its Hue and Saturation from the colormap, 
             // while the brightness is modulated by the shading intensity.
             // The resulting HSV colour is then converted back to RGB colour space for display.
-            RGB col = hot_colormap(t);
-            HSV hsv = rgb_to_hsv(col);
+            RGB col = colour_map(t);
+            HSV hsv = ColourMap::rgb_to_hsv(col);
             hsv.v   = intensity;
-            RGB out = hsv_to_rgb(hsv);
+            RGB out = ColourMap::hsv_to_rgb(hsv);
 
             img.setPixel(sf::Vector2u{ x, y }, sf::Color{
                 static_cast<std::uint8_t>(std::clamp(out.r, 0.f, 1.f) * 255.f),
@@ -415,7 +508,15 @@ int main()
 
     // ── Initial render ───────────────────────────────────────────────────────
     window.setTitle(sequences[seqIdx]->name() + " – rendering…");
-    render(img, vp, adaptive_maxiter(baseIter, vp), horizon, *sequences[seqIdx]);
+    Hot colourHot;
+    Ice colourIce;
+    Amber colourAmber;
+    const std::array<const ColourMap*, 3> colourMaps = {{
+        &colourHot, &colourIce, &colourAmber
+    }};
+    int colourIdx = 0;
+
+    render(img, vp, adaptive_maxiter(baseIter, vp), horizon, *sequences[seqIdx], *colourMaps[colourIdx]);
 
     // ── Create texture and sprite ─────────────────────────────────────────────
     sf::Texture tex;
@@ -427,7 +528,8 @@ int main()
     auto updateTitle = [&]() {
         const int iterNow = adaptive_maxiter(baseIter, vp);
         window.setTitle(sequences[seqIdx]->name()
-            + " [iter=" + std::to_string(iterNow)
+            + " [map=" + colourMaps[colourIdx]->name()
+            + ", iter=" + std::to_string(iterNow)
             + ", base=" + std::to_string(baseIter) + "]" + HINT);
     };
     updateTitle();
@@ -519,6 +621,10 @@ int main()
                     vp         = defaultVps[seqIdx];
                     needRender = true;
                 }
+                if (kp->code == sf::Keyboard::Key::C) {
+                    colourIdx  = (colourIdx + 1) % static_cast<int>(colourMaps.size());
+                    needRender = true;
+                }
             }
         }
 
@@ -526,7 +632,7 @@ int main()
         if (needRender && !dragging) {
             needRender = false;
             window.setTitle(sequences[seqIdx]->name() + " – rendering…");
-            render(img, vp, adaptive_maxiter(baseIter, vp), horizon, *sequences[seqIdx]);
+            render(img, vp, adaptive_maxiter(baseIter, vp), horizon, *sequences[seqIdx], *colourMaps[colourIdx]);
             tex.update(img);
             updateTitle();
         }
