@@ -1,25 +1,16 @@
 // mandelbrot.cpp – C++/SFML rewrite of mandelbrot.py
 //
-// Algorithm mirrors the Python version exactly:
-//  • z(n+1) = z(n)^k + c,  k = 2
-//  • Smooth (renormalised) iteration count:
-//      mu = N + 1 − log(log|Z_N|)/log(k) + log(log(horizon))/log(k)
-//    (Python's N = first n where |Z|<horizon was last set; C++ n = that + 1,
-//     so the formula here is  n + log_horizon − log(log|Z|)/log(k).)
-//  • Power-normalisation (γ = 0.3)  →  matplotlib 'hot' colormap
-//  • Hill-shading: LightSource(azdeg=315, altdeg=10), vert_exag=1.5,
-//    blend_mode='hsv'  (replace the Value channel with the diffuse intensity,
-//    keep Hue and Saturation from the colour map)
-//
 // Interactive controls:
 //   Mouse wheel   – zoom (centred on cursor)
 //   Left drag     – pan
 //   R             – reset to original view
 //   + / =         – double iteration count (max 8192)
 //   -             – halve  iteration count (min 50)
+//   Tab           – cycle fractal sequence (Mandelbrot → Burning Ship → Julia → Tricorn)
 
 #include <SFML/Graphics.hpp>
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <limits>
 #include <string>
@@ -32,82 +23,116 @@
 constexpr unsigned WIN_W = 900;
 constexpr unsigned WIN_H = 750;   // 900 × (2.5/3.0) preserves the aspect ratio
 
-constexpr long double K    = 2.0L;
-const     long double LOGK = std::log(K);
-
 // ─────────────────────────────────────────────────────────────────────────────
-//  Mandelbrot per-pixel iteration
-//  Returns {n, |Z_n|} where n is the first iteration at which |Z| ≥ horizon,
-//  or {0, 0} when the point never escapes (interior of the set).
+//  Fractal sequence abstraction
+//  Subclasses encapsulate the recurrence formula, its exponent, and the
+//  derived smooth (renormalised) iteration count.  Swapping in a different
+//  subclass (e.g. Burning Ship, Julia, Tricorn) is sufficient to render a
+//  completely different fractal without touching the renderer.
 // ─────────────────────────────────────────────────────────────────────────────
 struct IterResult { int n; long double absZ; };
 
-/** Compute the Mandelbrot iteration for a given point (cx, cy).
- *  Returns the iteration count and the magnitude of Z at escape.
- * 
- * The Mandelbrot set is defined as the set of points c in the complex plane for which the sequence defined by
- * Z(0) = 0 and Z(n+1) = Z(n)^k + c does not escape to infinity. In practice, we check if |Z| exceeds a certain horizon value.
- * 
- * The parameters are:
- * cx, cy: The real and imaginary parts of the complex number c.
- * maxiter: The maximum number of iterations to perform before giving up and considering the point as interior. 
- *          The bigger this is, the more detail we can see in the fractal, but it also takes more time to compute.
- * horizon2: The square of the escape radius (horizon). We compare |Z|^2 to this value for efficiency.
- * 
- * 
- * The point (cx, cy) corresponds to the complex number c = cx + i*cy. * 
- * 
- * The iteration is defined as:
- * Z(0) = 0   
- * Z(n+1) = Z(n)^k + c,  where c = cx + i*cy and k=2.
- * The point is considered to escape when |Z| ≥ horizon.
- * The function returns the first n where |Z| ≥ horizon, along with |Z| at that n.
- * If the point does not escape within maxiter iterations, it is considered an interior point,
- * and the function returns {0, 0.0L} to indicate this.
- * Note that the Python version uses np.nan for interior points, but we use 0.0L here.
- * This is because we want to ignore interior points when normalising the exterior values to [0,1].
- * The Python version also uses np.power(..., 0.3) to apply the γ
- * power, but this is done in the render function after normalising the smooth iteration counts.
- * 
- * 
- */
-IterResult mandelbrot_iter(long double cx, long double cy, int maxiter, long double horizon2)
-{
-    long double zr = 0.0L, zi = 0.0L;
-    for (int n = 0; n < maxiter; ++n) {
-        long double zr2 = zr * zr;
-        long double zi2 = zi * zi;
-        if (zr2 + zi2 >= horizon2)
-            return { n, std::sqrt(zr2 + zi2) };
-        long double tmp = zr2 - zi2 + cx;
-        zi = 2.0L * zr * zi + cy;
-        zr = tmp;
-    }
-    return { 0, 0.0L };   // interior point
-}
+class FractalSequence {
+public:
+    virtual ~FractalSequence() = default;
+
+    /** Short display name shown in the window title. */
+    virtual std::string name() const = 0;
+
+    /** Iterate the sequence for a given point (cx, cy).
+     *  Returns {n, |Z_n|} where n is the first iteration at which |Z| ≥ sqrt(horizon2),
+     *  or {0, 0} when the point never escapes (interior of the set).
+     */
+    virtual IterResult iterate(long double cx, long double cy,
+                               int maxiter, long double horizon2) const = 0;
+
+    /** Smooth (renormalised) iteration count.
+     *  Returns 0 for interior points (n == 0).
+     *  log_horizon = log(log(horizon)) / log(k), precomputed by the caller.
+     */
+    virtual long double smooth_mu(int n, long double absZ,
+                                  long double log_horizon) const = 0;
+
+    /** log(log(horizon)) / log(k)  – precomputed constant passed to smooth_mu. */
+    virtual long double log_horizon_factor(long double horizon) const = 0;
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Smooth (renormalised) iteration count
-//  Returns 0 for interior points.
-//  The formula is derived from the Python version's mu = N + 1 − log(log|Z_N|)/log(k) + log(log(horizon))/log(k),
-//  where N is the first n where |Z|≥horizon. Since our C++ mandelbrot_iter returns n = N + 1, we can rewrite this as:
-//  mu = n + log(log(horizon))/log(k) − log(log|Z|)/log(k)
-//  
-//  The mu value is used to create a smooth gradient of colours for points that escape, 
-//  rather than just colouring them by the integer iteration count.
-//  The formula works by taking the integer iteration count n 
-//  and adjusting it based on how close |Z| is to the horizon at the point of escape.
-//  For points that escape quickly (|Z| just exceeds the horizon), mu will be close to n,
-//  while for points that escape more slowly (|Z| much larger than the horizon), 
-//  mu will be closer to n + 1. This creates a smoother transition of colours in the rendered image.
+//  Shared smooth coloring for all quadratic (k=2) sequences
 // ─────────────────────────────────────────────────────────────────────────────
-long double smooth_mu(int n, long double absZ, long double log_horizon)
-{
-    if (n == 0 || absZ <= 1.0)
-        return 0.0L;
-    return static_cast<long double>(n) + log_horizon
-           - std::log(std::log(absZ)) / LOGK;
-}
+class QuadraticSequence : public FractalSequence {
+protected:
+    static constexpr long double K    = 2.0L;
+    static const     long double LOGK;   // = std::log(K), defined below
+public:
+    long double smooth_mu(int n, long double absZ,
+                          long double log_horizon) const override
+    {
+        if (n == 0 || absZ <= 1.0L)
+            return 0.0L;
+        return static_cast<long double>(n) + log_horizon
+               - std::log(std::log(absZ)) / LOGK;
+    }
+
+    long double log_horizon_factor(long double horizon) const override
+    {
+        return std::log(std::log(horizon)) / LOGK;
+    }
+};
+const long double QuadraticSequence::LOGK = std::log(QuadraticSequence::K);
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Mandelbrot:      Z(0) = 0,           Z(n+1) = Z(n)^2 + c
+// ─────────────────────────────────────────────────────────────────────────────
+class MandelbrotSequence : public QuadraticSequence {
+public:
+    std::string name() const override { return "Mandelbrot"; }
+
+    IterResult iterate(long double cx, long double cy,
+                       int maxiter, long double horizon2) const override
+    {
+        long double zr = 0.0L, zi = 0.0L;
+        for (int n = 0; n < maxiter; ++n) {
+            long double zr2 = zr * zr, zi2 = zi * zi;
+            if (zr2 + zi2 >= horizon2)
+                return { n, std::sqrt(zr2 + zi2) };
+            long double tmp = zr2 - zi2 + cx;
+            zi = 2.0L * zr * zi + cy;
+            zr = tmp;
+        }
+        return { 0, 0.0L };
+    }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Julia:           Z(0) = c,           Z(n+1) = Z(n)^2 + julia_c
+//  Classic parameter: julia_c = -0.7 + 0.27015i  (Douady rabbit neighbourhood)
+// ─────────────────────────────────────────────────────────────────────────────
+class JuliaSequence : public QuadraticSequence {
+    long double jr, ji;   // fixed Julia parameter
+public:
+    explicit JuliaSequence(long double real = -0.7L, long double imag = 0.27015L)
+        : jr(real), ji(imag) {}
+
+    std::string name() const override { return "Julia"; }
+
+    IterResult iterate(long double cx, long double cy,
+                       int maxiter, long double horizon2) const override
+    {
+        long double zr = cx, zi = cy;   // seed is the pixel coordinate
+        for (int n = 0; n < maxiter; ++n) {
+            long double zr2 = zr * zr, zi2 = zi * zi;
+            if (zr2 + zi2 >= horizon2)
+                return { n, std::sqrt(zr2 + zi2) };
+            long double tmp = zr2 - zi2 + jr;
+            zi = 2.0L * zr * zi + ji;
+            zr = tmp;
+        }
+        return { 0, 0.0L };
+    }
+};
+
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Colour utilities
@@ -224,13 +249,14 @@ int adaptive_maxiter(int baseIter, const Viewport& vp)
 //    3. Hill-shade + HSV blend
 //  
 // ─────────────────────────────────────────────────────────────────────────────
-void render(sf::Image& img, const Viewport& vp, int maxiter, long double horizon)
+void render(sf::Image& img, const Viewport& vp, int maxiter, long double horizon,
+            const FractalSequence& seq)
 {
     const unsigned W = img.getSize().x;
     const unsigned H = img.getSize().y;
 
     const long double horizon2    = horizon * horizon;
-    const long double log_horizon = std::log(std::log(horizon)) / LOGK;
+    const long double log_horizon = seq.log_horizon_factor(horizon);
 
     // ── 1. Compute smooth iteration counts (multi-threaded) ──────────────────
     // M[y * W + x] = smooth_mu(n, |Z|) for each pixel (x,y)
@@ -252,8 +278,8 @@ void render(sf::Image& img, const Viewport& vp, int maxiter, long double horizon
                 long double cy = vp.ymax - (vp.ymax - vp.ymin) * y / (H - 1.0L);
                 for (unsigned x = 0; x < W; ++x) {
                     long double cx = vp.xmin + (vp.xmax - vp.xmin) * x / (W - 1.0L);
-                    auto [n, absZ] = mandelbrot_iter(cx, cy, maxiter, horizon2);
-                    M[y * W + x]   = std::max(0.0L, smooth_mu(n, absZ, log_horizon));
+                    auto [n, absZ] = seq.iterate(cx, cy, maxiter, horizon2);
+                    M[y * W + x]   = std::max(0.0L, seq.smooth_mu(n, absZ, log_horizon));
                 }
             }
         };
@@ -361,11 +387,26 @@ void render(sf::Image& img, const Viewport& vp, int maxiter, long double horizon
 int main()
 {
     // ── Create window ─────────────────────────────────────────────────────────
-    sf::RenderWindow window(sf::VideoMode({ WIN_W, WIN_H }), "Mandelbrot Set");
+    sf::RenderWindow window(sf::VideoMode({ WIN_W, WIN_H }), "Fractal Set");
     window.setFramerateLimit(60);
 
+    // ── Fractal sequences (Tab cycles through them) ───────────────────────────
+    MandelbrotSequence  seqMandel;
+    JuliaSequence       seqJulia;
+
+    // One default viewport per sequence (same order)
+    // All viewports must satisfy (xmax-xmin)/(ymax-ymin) == WIN_W/WIN_H == 1.2
+    const std::array<Viewport, 2> defaultVps = {{
+        { -2.25L, 0.75L, -1.25L,  1.25L },  // Mandelbrot  – w=3.0  h=2.5  AR=1.2 ✓
+        { -1.8L,  1.8L,  -1.5L,   1.5L  },  // Julia        – w=3.6  h=3.0  AR=1.2 ✓
+    }};
+    const std::array<FractalSequence*, 2> sequences = {{
+        &seqMandel, &seqJulia
+    }};
+    int seqIdx = 0;
+
     // ── Initial viewport and parameters ───────────────────────────────────────
-    Viewport vp;
+    Viewport vp = defaultVps[seqIdx];
     int    baseIter = 200;
     long double horizon = std::ldexp(1.0L, 40);   // 2^40 (same as the Python script)
 
@@ -373,8 +414,8 @@ int main()
     sf::Image img(sf::Vector2u{ WIN_W, WIN_H });
 
     // ── Initial render ───────────────────────────────────────────────────────
-    window.setTitle("Mandelbrot Set – rendering…");
-    render(img, vp, adaptive_maxiter(baseIter, vp), horizon);
+    window.setTitle(sequences[seqIdx]->name() + " – rendering…");
+    render(img, vp, adaptive_maxiter(baseIter, vp), horizon, *sequences[seqIdx]);
 
     // ── Create texture and sprite ─────────────────────────────────────────────
     sf::Texture tex;
@@ -382,10 +423,11 @@ int main()
     sf::Sprite sprite(tex);
 
     // ── Window title and update function ─────────────────────────────────────
-    const std::string HINT = "  |  scroll=zoom  drag=pan  R=reset  +/-=iter";
+    const std::string HINT = "  |  scroll=zoom  drag=pan  R=reset  +/-=iter  Tab=toggle";
     auto updateTitle = [&]() {
         const int iterNow = adaptive_maxiter(baseIter, vp);
-        window.setTitle("Mandelbrot Set [iter=" + std::to_string(iterNow)
+        window.setTitle(sequences[seqIdx]->name()
+            + " [iter=" + std::to_string(iterNow)
             + ", base=" + std::to_string(baseIter) + "]" + HINT);
     };
     updateTitle();
@@ -396,6 +438,16 @@ int main()
     sf::Vector2i dragOrigin;
     Viewport     dragVp;
 
+    // ── Coordinate conversion (pixel → world) ─────────────────────────────────
+    // Converts pixel coordinates (with origin at top-left) to complex plane coordinates (with origin at bottom-left).
+    // This is used to determine the point in the complex plane that corresponds to the mouse cursor position,
+    // which is necessary for implementing zooming centred on the cursor and panning.
+    // The conversion is done by linearly interpolating between the viewport bounds (vp.xmin, vp.xmax) and (vp.ymin, vp.ymax)
+    // based on the pixel coordinates (p.x, p.y) and the window dimensions (WIN_W, WIN_H).
+    // The y-coordinate is inverted (vp.ymax - ...) because pixel coordinates have the y-axis pointing downwards,
+    // while the complex plane coordinates have the y-axis pointing upwards.
+    // The resulting world coordinates are returned as a pair of long doubles representing 
+    // the real and imaginary parts of the complex number.
     auto pixelToWorld = [&](sf::Vector2i p) {
         return std::pair<double, double>{
             vp.xmin + (vp.xmax - vp.xmin) * p.x / static_cast<long double>(WIN_W - 1),
@@ -451,7 +503,7 @@ int main()
             // Keyboard shortcuts
             if (const auto* kp = ev->getIf<sf::Event::KeyPressed>()) {
                 if (kp->code == sf::Keyboard::Key::R) {
-                    vp         = Viewport{};
+                    vp         = defaultVps[seqIdx];
                     needRender = true;
                 }
                 if (kp->code == sf::Keyboard::Key::Equal) {   // + or =
@@ -462,14 +514,19 @@ int main()
                     baseIter   = std::max(baseIter / 2, 50);
                     needRender = true;
                 }
+                if (kp->code == sf::Keyboard::Key::Tab) {
+                    seqIdx     = (seqIdx + 1) % static_cast<int>(sequences.size());
+                    vp         = defaultVps[seqIdx];
+                    needRender = true;
+                }
             }
         }
 
         // Trigger re-render after a pan or zoom is committed
         if (needRender && !dragging) {
             needRender = false;
-            window.setTitle("Mandelbrot Set – rendering…");
-            render(img, vp, adaptive_maxiter(baseIter, vp), horizon);
+            window.setTitle(sequences[seqIdx]->name() + " – rendering…");
+            render(img, vp, adaptive_maxiter(baseIter, vp), horizon, *sequences[seqIdx]);
             tex.update(img);
             updateTitle();
         }
