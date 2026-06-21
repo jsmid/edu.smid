@@ -39,7 +39,7 @@ public:
     // Copy constructor (deep copy)
     Buffer(const Buffer& other) : data(new int[other.size]), size(other.size) {
         std::copy(other.data, other.data + size, data); // Copy data from other Buffer 
-        std::cout << "Copied Buffer of size " << size << std::endl;
+        std::cout << "Copied (deep) Buffer of size " << size << std::endl;
     }
 
     // Move constructor (steals resources)
@@ -86,6 +86,14 @@ public:
             std::cout << data[i] << " ";
         std::cout << std::endl;
     }
+
+    bool changeDataValue(size_t index, int value) {
+        if (index >= size) return false;
+        std::cout << "Changing data at index " << index << " from " << data[index] << " to " << value << std::endl;
+        data[index] = value;
+
+        return true;
+    }
 };
 
 Buffer createBuffer(size_t n) {
@@ -95,18 +103,33 @@ Buffer createBuffer(size_t n) {
 }
 
 int main() {
+    std::cout << "Demonstrating Move Semantics in C++\n" << std::endl;
+    std::cout << "Creating Buffer a:" << std::endl;
     Buffer a(5);
+    std::cout << "Filling Buffer a with 1s:" << std::endl;
     a.fill(1);
     a.print();
 
+    std::cout << "\nCopying Buffer a to Buffer b:" << std::endl;
     Buffer b = a; // Copy constructor
     b.print();
+    std::cout << "\nModifying Buffer a:" << std::endl;
+    a.changeDataValue(0, 10); // Modify a to show deep copy
+    std::cout << "After modifying a:" << std::endl;
+    a.print();
+    std::cout << "Buffer b remains unchanged:" << std::endl;
+    b.print();
 
-    Buffer c = createBuffer(3); // Move constructor
+    std::cout << "\nCreating Buffer c using createBuffer (move semantics):" << std::endl;
+    // call Buffer(Buffer&& other) via return value optimization (RVO)
+    Buffer c = createBuffer(3);
     c.print();
 
+    std::cout << "\nCreating Buffer d:" << std::endl;
     Buffer d(2);
-    d = createBuffer(4); // Move assignment
+    d.print();
+    std::cout << "\nMove-assigning Buffer d from createBuffer:" << std::endl;
+    d = createBuffer(4); // Move assignment   
     d.print();
 
     return 0;
