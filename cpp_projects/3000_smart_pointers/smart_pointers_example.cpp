@@ -1,97 +1,123 @@
 /*
-    Smart Pointers Example in C++
+Smart Pointers in C++11
+=======================
+Smart pointers are RAII wrappers around dynamically allocated objects.
+They manage object lifetime automatically and reduce memory bugs.
 
-    Purpose:
-    Smart pointers, introduced in C++11, help manage dynamic memory automatically and safely.
-    They prevent memory leaks and dangling pointers by ensuring that memory is released when it is no longer needed.
-    The most common smart pointers are std::unique_ptr, std::shared_ptr, and std::weak_ptr.
-
-    This example demonstrates how to use unique_ptr and shared_ptr to manage objects.
+Main tools:
+- std::unique_ptr : exclusive ownership
+- std::shared_ptr : shared ownership (reference counted)
+- std::weak_ptr   : non-owning observer of shared_ptr-managed objects
 */
 
 #include <iostream>
 #include <memory>
+#include <vector>
+
+using std::cout;
+using std::endl;
+
+void section(const char* title) {
+    cout << "\n=== " << title << " ===\n";
+}
 
 class Widget {
 public:
-    Widget(int id) : id(id) {
-        std::cout << "Widget " << id << " constructed.\n";
+    explicit Widget(int id_) : id(id_) {
+        cout << "Widget " << id << " constructed\n";
     }
+
     ~Widget() {
-        std::cout << "Widget " << id << " destroyed.\n";
+        cout << "Widget " << id << " destroyed\n";
     }
-    void greet() const {
-        std::cout << "Hello from Widget " << id << "!\n";
+
+    void hello() const {
+        cout << "Hello from Widget " << id << "\n";
     }
+
 private:
     int id;
 };
 
 int main() {
-    // Unique pointer: sole ownership, automatically deletes the object
-    std::unique_ptr<Widget> uptr(new Widget(1));
-    uptr->greet();
+    section("1) unique_ptr: single owner");
 
-    // Transfer ownership with std::move
-    std::cout << "Transferring ownership of Widget 1 to uptr2.\n";
-    std::unique_ptr<Widget> uptr2 = std::move(uptr);
-    if (!uptr) {
-        std::cout << "uptr is now empty after move.\n";
+    // C++11 supports unique_ptr and move semantics.
+    // Use std::make_unique in real code (C++14) to avoid manual new/delete.
+    std::unique_ptr<Widget> owner1(new Widget(1));
+    owner1->hello();
+
+    // Transfer ownership with std::move.
+    // After the move, owner1 is null and owner2 owns the Widget.
+    std::unique_ptr<Widget> owner2 = std::move(owner1);
+    cout << "owner1 is " << (owner1 ? "not null" : "null after move") << "\n";
+    owner2->hello();
+
+    section("2) unique_ptr in containers");
+
+    // unique_ptr can be stored in containers, but they cannot be copied.
+    std::vector<std::unique_ptr<Widget> > store;
+    store.push_back(std::unique_ptr<Widget>(new Widget(2)));
+    store.push_back(std::unique_ptr<Widget>(new Widget(3)));
+
+    for (std::size_t i = 0; i < store.size(); ++i) {
+        store[i]->hello();
     }
-    uptr2->greet();
 
-    // Shared pointer: shared ownership, deletes object when last owner goes out of scope
-    // sptr1 and sptr2 share ownership of the same Widget object
-    // Use make_shared for better performance and safety
-    // std::shared_ptr<Widget> sptr1 = std::make_shared<Widget>(2);
-    // This is equivalent to the line below, but using make_shared is preferred
-    // 
-    // It allocates memory for the object and the control block in a single allocation.
-    // This reduces memory fragmentation and improves cache locality.
-    // It also avoids the overhead of an additional allocation for the control block.
-    std::shared_ptr<Widget> sptr1(new Widget(2));
+    section("3) shared_ptr: shared ownership");
+
+    // Prefer make_shared in real code (single allocation for object+control block).
+    // shared_ptr can be copied, and it keeps track of how many owners exist.
+    // When the last shared_ptr is destroyed, the object is deleted automatically.
+    // Note: shared_ptr is heavier than unique_ptr due to reference counting.
+    std::shared_ptr<Widget> shared1 = std::make_shared<Widget>(10);
+    cout << "shared1 use_count = " << shared1.use_count() << "\n";
+
     {
-        std::cout << "Creating shared_ptr sptr2 from sptr1.\n";
-        // sptr2 is a copy of sptr1, sharing ownership of the Widget object
-        // 
-        // Both sptr1 and sptr2 now share ownership of the Widget object
-        std::shared_ptr<Widget> sptr2 = sptr1; // Both share ownership
-        // The use_count of the shared pointer increases to 2
-        // This means that there are two shared pointers managing the same Widget object.
-        // When both sptr1 and sptr2 go out of scope, the Widget object will be destroyed.
-        // This is a common pattern in C++ to manage shared ownership of dynamically allocated objects.
-        // Using shared_ptr ensures that the Widget object is deleted automatically when the last shared_ptr goes out of scope.
-        // This prevents memory leaks and dangling pointers.
-        std::cout << "sptr1 use_count: " << sptr1.use_count() << "\n";
-        std::cout << "sptr2 use_count: " << sptr2.use_count() << "\n";
-        sptr2->greet();
-    } // sptr2 goes out of scope, but object is not deleted yet
-
-    std::cout << "sptr1 use_count after sptr2 is out of scope: " << sptr1.use_count() << "\n";
-    sptr1->greet();
-
-    // Weak pointer: non-owning reference to a shared_ptr-managed object
-    // It does not affect the reference count of the shared_ptr
-    // This is useful to avoid circular references that can lead to memory leaks.
-    // A weak_ptr can be converted to a shared_ptr using lock(), which returns a shared_ptr if the object is still alive.
-    std::cout << "Creating weak_ptr wptr from sptr1.\n";
-    // wptr is a weak reference to the Widget object managed by sptr1
-    // It does not increase the reference count of sptr1.
-    // If sptr1 is destroyed, wptr will no longer be valid.
-    // This is useful for caching or observer patterns where you want to avoid ownership.
-    //
-    // A weak_ptr can be used to check if the object is still alive without affecting its lifetime.
-    // If the object is destroyed, the weak_ptr becomes expired and cannot be locked.
-    // This prevents dangling pointers and allows safe access to the object if it still exists.
-    std::weak_ptr<Widget> wptr = sptr1;
-    if (auto locked = wptr.lock()) {
-        std::cout << "Locked weak_ptr, use_count: " << locked.use_count() << "\n";
-        locked->greet();
-    } else {
-        std::cout << "Widget already destroyed.\n";
+        // Create additional shared_ptr instances sharing ownership of the same Widget.
+        // Each copy increments the reference count.
+        // When they go out of scope, the count decrements.
+        // When the count reaches zero, the Widget is destroyed.
+        std::shared_ptr<Widget> shared2 = shared1;
+        std::shared_ptr<Widget> shared3 = shared1;
+        cout << "inside scope use_count = " << shared1.use_count() << "\n";
+        shared2->hello();
+        shared3->hello();
     }
 
-    // When sptr1 goes out of scope, Widget 2 is destroyed automatically
+    cout << "after scope use_count = " << shared1.use_count() << "\n";
+
+    section("4) weak_ptr: observe without owning");
+
+    // weak_ptr does not affect the reference count of shared_ptr.
+    // It can be used to break cycles or to observe an object without extending its lifetime.
+    // Use lock() to get a shared_ptr if the object is still alive.
+    // weak_ptr is useful for caches, observers, and breaking circular references.
+    // Note: weak_ptr is not copyable from unique_ptr, only from shared_ptr.
+    std::weak_ptr<Widget> observer = shared1;
+    cout << "observer expired? " << (observer.expired() ? "yes" : "no") << "\n";
+
+    if (std::shared_ptr<Widget> locked = observer.lock()) {
+        cout << "lock() succeeded, use_count = " << locked.use_count() << "\n";
+        locked->hello();
+    }
+
+    // Drop last shared owner.
+    // After this, the Widget will be destroyed, and observer will expire.
+    shared1.reset();
+    cout << "after reset, observer expired? " << (observer.expired() ? "yes" : "no") << "\n";
+
+    // Attempt to lock the weak_ptr after the object has been destroyed.
+    // This will return a null shared_ptr, indicating the object is gone.
+    // Note: lock() is safe and does not throw; it returns an empty shared_ptr if the object is gone.
+    if (!observer.lock()) {
+        cout << "lock() now fails safely (object already destroyed)\n";
+    }
+
+    section("5) Typical guidance");
+    cout << "Use unique_ptr by default.\n";
+    cout << "Use shared_ptr only for real shared ownership.\n";
+    cout << "Use weak_ptr to break cycles and avoid extending lifetime.\n";
 
     return 0;
 }

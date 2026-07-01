@@ -1,13 +1,9 @@
 @echo off
-REM filepath: c:\Documents\cpp_projects\0201_hellocpp\build_all.bat
-REM Batch file to compile all .cpp files in the current folder using g++
-
-REM Set the compiler path if needed (uncomment and edit the next line)
-REM set PATH=C:\MinGW\bin;%PATH%
+REM Compile all .cpp files in this folder using g++ and C++11
 
 for %%f in (*.cpp) do (
     echo Compiling %%f ...
-    g++ -std=c++11 -o "%%~nf.exe" "%%f"
+    g++ -std=c++11 -Wall -Wextra -pedantic -o "%%~nf.exe" "%%f"
 )
 echo All files compiled.
 pause

@@ -1,72 +1,122 @@
 /*
-    Lambda Expressions Example in C++
+Lambda Expressions in C++11
+===========================
+Lambdas are unnamed function objects created inline.
+They are especially useful with STL algorithms and short custom behavior.
 
-    Purpose:
-    Lambda expressions, introduced in C++11, allow you to define anonymous functions (functions without a name)
-    directly in your code. They are useful for short, inline operations, especially as arguments to algorithms,
-    event handlers, or for capturing local variables in a concise way.
-
-    This example demonstrates basic lambda syntax, capturing variables, and using lambdas with standard algorithms.
+General form:
+  [capture](params) -> return_type { body }
 */
 
-#include <iostream>
-#include <vector>
 #include <algorithm>
+#include <functional>
+#include <iostream>
+#include <string>
+#include <vector>
+
+using std::cout;
+using std::endl;
+
+void section(const char* title) {
+    cout << "\n=== " << title << " ===\n";
+}
 
 int main() {
-    // Basic lambda: no capture, adds two numbers
-    auto add = [](int a, int b) -> int {
-        return a + b;
-    };
-    std::cout << "add(2, 3) = " << add(2, 3) << std::endl;
+    section("1) Basic syntax and type");
 
-    // Lambda with implicit return type
-    auto multiply = [](int a, int b) { return a * b; };
-    std::cout << "multiply(4, 5) = " << multiply(4, 5) << std::endl;
+    // A simple lambda that adds two integers.
+    auto add = [](int a, int b) { return a + b; };
+    cout << "add(2, 3) = " << add(2, 3) << endl;
 
-    // Lambda capturing local variables by value
+    // Each lambda has a unique closure type.
+    // The type of 'add' is not a function pointer, but a unique class with operator().
+    auto add2 = [](int a, int b) { return a + b; };
+    cout << "add2(4, 5) = " << add2(4, 5) << endl;
+
+    section("2) Captures by value and by reference");
+
     int factor = 10;
-    auto times_factor = [factor](int x) { return x * factor; };
-    std::cout << "times_factor(7) = " << times_factor(7) << std::endl;
+    // Capture 'factor' by value and by reference.
+    auto by_value = [factor](int x) { return x * factor; };
+    auto by_ref = [&factor](int x) { return x * factor; };
 
-    // Lambda capturing local variables by reference
-    int sum = 0;
-    std::vector<int> numbers = {1, 2, 3, 4, 5};
-    std::for_each(numbers.begin(), numbers.end(), [&sum](int x) {
-        // Accumulate sum by reference
-        sum += x;
-    });
-    std::cout << "Sum of numbers = " << sum << std::endl;
+    cout << "factor initially = " << factor << endl;
+    cout << "by_value(3) = " << by_value(3) << endl;
+    cout << "by_ref(3) = " << by_ref(3) << endl;
 
-    // Lambda used directly in std::for_each to print elements
-    std::cout << "Numbers: ";
-    std::for_each(numbers.begin(), numbers.end(), [](int x) { 
-        // Print each number
-        std::cout << x << " ";
-    });
-    std::cout << std::endl;
+    factor = 20;
+    cout << "factor changed to " << factor << endl;
+    cout << "by_value(3) still uses old captured value -> " << by_value(3) << endl;
+    cout << "by_ref(3) sees new value -> " << by_ref(3) << endl;
 
-    // Lambda with mutable capture
+    section("3) mutable lambda");
+
     int counter = 0;
-    auto increment = [counter]() mutable {
-        return ++counter;
+    // A mutable lambda allows modification of captured variables by value.
+    // The captured 'counter' is a copy, so changes do not affect the original.
+    // Note: mutable is only meaningful for value captures; reference captures can always be modified.
+    auto increment_local_copy = [counter]() mutable {
+        ++counter;
+        return counter;
     };
 
-    std::cout << "increment() = " << increment() << std::endl; // counter inside lambda is incremented
-    std::cout << "increment() = " << increment() << std::endl; // counter inside lambda is incremented again
-    std::cout << "counter (outside lambda) = " << counter << std::endl; // counter remains unchanged
+    cout << "increment_local_copy() = " << increment_local_copy() << endl;
+    cout << "increment_local_copy() = " << increment_local_copy() << endl;
+    cout << "outside counter remains = " << counter << endl;
 
-    // Lambda as a predicate in std::find_if
-    int to_find = 5; // Variable to capture, exists in the vector.
-    auto it = std::find_if(numbers.begin(), numbers.end(), [to_find](int x) {
-        return x == to_find;
-    });
+    section("4) Lambdas with STL algorithms");
 
-    if (it != numbers.end()) { // Found
-        std::cout << "Found " << to_find << " in numbers." << std::endl;
-    } else { // Not found
-        std::cout << to_find << " not found in numbers." << std::endl;
-    }    
+    // Use a lambda to filter and transform a vector of integers.
+    std::vector<int> values;
+    values.push_back(1);
+    values.push_back(2);
+    values.push_back(3);
+    values.push_back(4);
+    values.push_back(5);
+
+    int sum = 0;
+    // Use std::for_each with a lambda to accumulate the sum of values.
+    // Capture 'sum' by reference to modify it inside the lambda.
+    // Note: std::for_each is a simple example; in real code, consider using std::accumulate for summation.
+    std::for_each(values.begin(), values.end(), [&sum](int v) { sum += v; });
+    cout << "sum = " << sum << endl;
+
+    // Use std::find_if with a lambda to find the first even number.
+    // The lambda captures nothing and checks if a number is even.
+    // Note: std::find_if returns an iterator to the first element satisfying the condition, or end() if none found.
+    std::vector<int>::iterator first_even = std::find_if(
+        values.begin(), values.end(),
+        [](int v) { return v % 2 == 0; }
+    );
+
+    if (first_even != values.end()) {
+        cout << "first even value = " << *first_even << endl;
+    }
+
+    // Use std::sort with a lambda to sort the vector in descending order.
+    // The lambda captures nothing and compares two integers.
+    std::sort(values.begin(), values.end(), [](int a, int b) { return a > b; });
+    cout << "sorted descending: ";
+    for (std::size_t i = 0; i < values.size(); ++i) {
+        cout << values[i] << ' ';
+    }
+    cout << endl;
+
+    section("5) Storing lambdas");
+
+    // std::function can store callable objects with matching signature.
+    // Note: std::function has some overhead compared to direct lambda usage.
+    std::function<bool(const std::string&)> long_enough = [](const std::string& s) {
+        return s.size() >= 5;
+    };
+
+    cout << "long_enough(\"cat\") = " << (long_enough("cat") ? "true" : "false") << endl;
+    cout << "long_enough(\"tiger\") = " << (long_enough("tiger") ? "true" : "false") << endl;
+
+    section("6) Practical guidance");
+    cout << "Capture only what you need.\n";
+    cout << "Prefer explicit capture lists in teaching and production code.\n";
+    cout << "Use reference capture only when object lifetime is guaranteed.\n";
 
     return 0;
 }
