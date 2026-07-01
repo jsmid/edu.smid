@@ -53,8 +53,8 @@ int main() {
     cout << "vp == nullptr ? " << (vp == nullptr ? "true" : "false") << endl;
 
     // nullptr is convertible to bool (false), but not to arbitrary integers.
-    bool b = nullptr;
-    cout << "bool(nullptr) = " << (b ? "true" : "false") << endl;
+    // bool b = nullptr;
+    // cout << "bool(nullptr) = " << (b ? "true" : "false") << endl;
     // int n = nullptr;  // compile error: not implicitly convertible to int
 
     section("4) std::nullptr_t in APIs");
